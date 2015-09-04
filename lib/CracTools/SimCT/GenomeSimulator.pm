@@ -63,7 +63,7 @@ sub _init {
     $annot->{start}--;
     $annot->{end}--;
     my $gene_id = $annot->{attributes}->{gene_id};
-    my $gene = $self->{genes}->{$gene_id};
+    my $gene = $self->getGene($gene_id);
     # If this gene is already known, we adjust its boundaries
     # if needed
     if(defined $gene) {
@@ -77,12 +77,12 @@ sub _init {
         end     => $annot->{end},
         strand  => $annot->{strand},
         exons   => {},
-        redef   => 0,
       };
+      $gene = $self->getGene($gene_id);
     }
     # Now we add the transcripts to its exons
     my $exon_key = _getExonKey($annot->{start},$annot->{end});
-    push @{$self->{genes}->{$gene_id}->{exons}->{$exon_key}}, $annot->{attributes}->{transcript_id};
+    push @{$gene->{exons}->{$exon_key}}, $annot->{attributes}->{transcript_id};
   }
 
   # We remove from the annotations, overlapping genes and exons
@@ -227,6 +227,8 @@ sub addSubstitution {
   my ($chr, $pos, $new_nuc) = @_;
   if($pos >= $self->getReferenceLength($chr)) {
     carp "Substitution position is greater that the reference length";
+  } elsif(length $new_nuc != 1) {
+    carp "Substitution is not composed of 1 nucleotid";
   } elsif(!$self->genomeMask->getPos($chr,$pos)) {
     push @{$self->{mutations}}, {
       type    => 'sub',
@@ -238,6 +240,31 @@ sub addSubstitution {
     return 1;
   }
   return 0;
+}
+
+# Give two gene_ids and two exon_ids
+sub addFusion {
+  my $self = shift;
+  my ($gene_A_id, $exon_A_id, $gene_B_id, $exon_B_id) = @_;
+  my $gene_A = $self->getGene($gene_A_id);
+  my $gene_B = $self->getGene($gene_B_id);
+  if(defined $gene_A && defined $gene_B) {
+    push @{$self->{fusions}}, {
+      gene_A  => $gene_A_id,
+      exon_A  => $exon_A_id,
+      gene_B  => $gene_B_id,
+      exon_B  => $exon_B_id
+    };
+  }
+}
+
+sub fusions {
+  my $self = shift;
+  if(defined $self->{fusions}) {
+    return @{$self->{fusions}};
+  } else {
+    return ();
+  }
 }
 
 # Return an array with all the mutations
@@ -332,17 +359,45 @@ sub generateGenome {
   foreach my $chr (sort $self->references) {
     my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/chr$chr.fa") if defined $fasta_dir;
     my $fasta_input_it  = CracTools::Utils::seqFileIterator($self->getReferenceFile($chr));
-    my $chr_entry       = $fasta_input_it->();
+    my $chr_entry       = $fasta_input_it->(); # This load the entire FASTA entry into memory
     my $remainder       = 0; # What's left in the current FASTA line
     my $index           = 0; # Index of the original FASTA sequence
     my $offset          = 0; # Offset difference between the original and the mutated genome
 
+    # We update the fusion genes that involves this chromosome and
+    # store the corresponding sequences
+    foreach my $fusion ($self->fusions) {
+      foreach my $side (('A','B')) {
+        my $gene = $self->getGene($fusion->{"gene_$side"});
+        my $exon = $fusion->{"exon_$side"};
+
+        # We only consider this gene if it is located on the current chromosom
+        next if $gene->{chr} ne $chr;
+
+        # Depending on the side and the strand, we retrieve the appropriate sequence
+        my $fused_sequence; 
+        if(($gene->{strand} eq '+' && $side eq 'A') || 
+           ($gene->{strand} eq '-' && $side eq 'B')) {
+          my $fusion_length = _getExonEnd($exon) - $gene->{start} + 1;
+          $fused_sequence   = substr($chr_entry->{seq},$gene->{start},$fusion_length);
+        } else {
+          my $fusion_length = $gene->{end} - _getExonStart($exon) + 1;
+          $fused_sequence   = substr($chr_entry->{seq},_getExonStart($exon),$fusion_length);
+        }
+
+        # We reverse the sequence if its originate from the reverse strand
+        $fused_sequence  = CracTools::Utils::reverseComplement($fused_sequence) if $gene->{strand} eq '-';
+
+        $fusion->{"sequence_$side"} = $fused_sequence;
+      }
+    }
+
     # Write the header of fasta output
     print $fasta_output_fh ">".$chr_entry->{name}."\n" if defined $fasta_output_fh;
-    # Get genes annotations sorted by position
     
     # We create an array with all exons that will be modified when applying all the mutations
     # to the reference genome
+    # Get genes annotations sorted by position
     # This does not modify the original loaded annotations
     my @exons;
     my @genes_sorted = sort { $a->getGene($a)->{start} <=> $b->getGene($b)->{start} } grep { $self->getGene($_)->{chr} eq $chr} $self->genes;
@@ -446,6 +501,9 @@ sub generateGenome {
         }
         $remainder = _printFASTA($fasta_output_fh,$mut->{new_nuc},$remainder) if defined $fasta_output_fh;
         $index++;
+      } elsif ($mut->{type} eq 'fusion') {
+        
+
       } else {
         carp("Unknown mutation type ".$mut->{type});
       }
@@ -468,6 +526,17 @@ sub generateGenome {
     # And print the exons to the GTF
     if(defined $gtf_output_fh) { _printGTF($gtf_output_fh,$_) foreach grep {!defined $_->{deleted}} @exons;}
   }
+
+  # Now we print an extra FASTA file with fusions
+  my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/chrFusions.fa") if defined $fasta_dir;
+  print $fasta_output_fh ">chrFusions\n" if defined $fasta_output_fh;
+  my $remainder       = 0;
+  foreach my $fusion ($self->fusions) {
+    # First we verify that we have the sequences of both part of the fusions
+    next if !defined $fusion->{sequence_A} || ! defined $fusion->{sequence_B};
+    $remainder = _printFASTA($fasta_output_fh,$fusion->{sequence_A}.$fusion->{sequence_B},$remainder) if defined $fasta_output_fh;
+  }
+  close($fasta_output_fh);
 }
 
 1;
