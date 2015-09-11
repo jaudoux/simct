@@ -6,13 +6,13 @@ use warnings;
 
 use List::Util qw(min max);
 use Carp;
+use Storable; # In order to clone the GenomeSimulator
+use Data::Dumper;
 
 use CracTools::Utils;
 use CracTools::GenomeMask;
-
-use constant FASTA_LINE_LENGTH => 60;
-
-#my @nucleotides = ('A','C','G','T');
+use CracTools::Interval::Query;
+use CracTools::SimCT::Const;
 
 =head2 new
 
@@ -30,6 +30,9 @@ sub new {
   my $self = bless {
     reference_sequence_files => $reference_sequence_files,
     annotation_file => $annotation_file,
+    genes                     => {},
+    mutations                 => [], # Hold: insertions, deletions and substitutions
+    fusions                   => [], # Hold: gene fusions
   }, $class;
 
   $self->_init();
@@ -273,6 +276,13 @@ sub mutations {
   return @{$self->{mutations}};
 }
 
+
+sub liftoverQuery {
+  my $self = shift;
+  $self->generateLiftover if !defined $self->{liftover_query};
+  return $self->{liftover_query};
+}
+
 # Create a hash key from exon coordinates
 sub _getExonKey {
   my ($start, $end) = @_;
@@ -291,73 +301,25 @@ sub _getExonStart {
   return (split(",",$exon_key))[0];
 }
 
-# Write the mutated fasta files
-# @ARG Handle of the output file
-# @ARG String to be outtputted
-# @ARG Number of characters already written on
-#      the current line
-# @RETURN The number of characters printed on the
-#         last line
-sub _printFASTA($$$) {
-  my ($handle, $string, $remainder) = @_;
-  my $current = 0;
-  if ($remainder > 0) {
-    $current = min(FASTA_LINE_LENGTH-$remainder,length $string);
-    print $handle substr($string, 0, $current);
-    if ($current == length $string) {
-      return length($string)+$remainder;
-    } else {
-      print $handle "\n";
-    }
-  }
-  for (; $current+FASTA_LINE_LENGTH <= length $string; $current += FASTA_LINE_LENGTH) {
-    print $handle substr($string, $current, FASTA_LINE_LENGTH),"\n";
-  }
-  if ($current < length($string)) {
-    print $handle substr($string, $current, length($string)-$current);
-    $remainder = length($string)-$current;
-  } else {
-    $remainder = 0;
-  }
-  return $remainder;
-}
-
-sub _printGTF($$) {
-  my ($fh,$exon) = @_;
-  foreach my $transcript_id (@{$exon->{transcript_ids}}) {
-    print $fh join ("\t",
-      $exon->{chr},       # seqname
-      "GenomeSimulator",  # source
-      "exon",             # feature
-      $exon->{start} + 1, # start
-      $exon->{end} + 1,   # end
-      ".",                # score
-      $exon->{strand},    # strand
-      ".",                # frame
-      join(" ",           # attributes
-        'gene_id "'.$exon->{gene_id}.'";',
-        'transcript_id "'.$transcript_id.'";',
-      ),
-    ), "\n";
-  }
-}
-
 # Generate the simulated genome in its current state
 # There is three possible output files:
 # - The fasta geneome
 # - the mutation file
 # - the gtf file
+# Return a copy of the GenomeSimulator that is a "frozen" copy of the simulated genome
+# the original one, can still continue to evolve
 sub generateGenome {
-  my $self          = shift;
-  my %args          = @_;
-  my $fasta_dir     = $args{fasta_dir};
-  my $mut_file      = $args{mutation_file};
-  my $gtf_file      = $args{gtf_file};
-  my $gtf_output_fh = CracTools::Utils::getWritingFileHandle($gtf_file) if defined $gtf_file;
-  my $mut_output_fh = CracTools::Utils::getWritingFileHandle($mut_file) if defined $mut_file;
+  my $self            = shift;
+  my %args            = @_;
+  my $fasta_dir       = $args{fasta_dir};
+  my $mut_file        = $args{mutation_file};
+  my $gtf_file        = $args{gtf_file};
+  my $gtf_output_fh   = CracTools::Utils::getWritingFileHandle($gtf_file) if defined $gtf_file;
+  my $mut_output_fh   = CracTools::Utils::getWritingFileHandle($mut_file) if defined $mut_file;
   
+  # We generate the simulated genome for each chr
   foreach my $chr (sort $self->references) {
-    my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/chr$chr.fa") if defined $fasta_dir;
+    my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/$chr.fa") if defined $fasta_dir;
     my $fasta_input_it  = CracTools::Utils::seqFileIterator($self->getReferenceFile($chr));
     my $chr_entry       = $fasta_input_it->(); # This load the entire FASTA entry into memory
     my $remainder       = 0; # What's left in the current FASTA line
@@ -368,27 +330,34 @@ sub generateGenome {
     # store the corresponding sequences
     foreach my $fusion ($self->fusions) {
       foreach my $side (('A','B')) {
-        my $gene = $self->getGene($fusion->{"gene_$side"});
-        my $exon = $fusion->{"exon_$side"};
+        my $fused_gene = $self->getGene($fusion->{"gene_$side"});
+        my $fused_exon = $fusion->{"exon_$side"};
 
         # We only consider this gene if it is located on the current chromosom
-        next if $gene->{chr} ne $chr;
+        next if $fused_gene->{chr} ne $chr;
 
         # Depending on the side and the strand, we retrieve the appropriate sequence
+        # and we place the annotations relative to this fusion into the annotation
+        # structure
         my $fused_sequence; 
-        if(($gene->{strand} eq '+' && $side eq 'A') || 
-           ($gene->{strand} eq '-' && $side eq 'B')) {
-          my $fusion_length = _getExonEnd($exon) - $gene->{start} + 1;
-          $fused_sequence   = substr($chr_entry->{seq},$gene->{start},$fusion_length);
+        my $fused_start;
+
+        if(($fused_gene->{strand} eq '+' && $side eq 'A') || 
+           ($fused_gene->{strand} eq '-' && $side eq 'B')) {
+          my $fusion_length = _getExonEnd($fused_exon) - $fused_gene->{start} + 1;
+          $fused_sequence   = substr($chr_entry->{seq},$fused_gene->{start},$fusion_length);
+          $fused_start      = $fused_gene->{start};
         } else {
-          my $fusion_length = $gene->{end} - _getExonStart($exon) + 1;
-          $fused_sequence   = substr($chr_entry->{seq},_getExonStart($exon),$fusion_length);
+          my $fusion_length = $fused_gene->{end} - _getExonStart($fused_exon) + 1;
+          $fused_sequence   = substr($chr_entry->{seq},_getExonStart($fused_exon),$fusion_length);
+          $fused_start      = _getExonStart($fused_exon);
         }
 
         # We reverse the sequence if its originate from the reverse strand
-        $fused_sequence  = CracTools::Utils::reverseComplement($fused_sequence) if $gene->{strand} eq '-';
+        $fused_sequence  = CracTools::Utils::reverseComplement($fused_sequence) if $fused_gene->{strand} eq '-';
 
         $fusion->{"sequence_$side"} = $fused_sequence;
+        $fusion->{"start_$side"}    = $fused_start;
       }
     }
 
@@ -400,7 +369,7 @@ sub generateGenome {
     # Get genes annotations sorted by position
     # This does not modify the original loaded annotations
     my @exons;
-    my @genes_sorted = sort { $a->getGene($a)->{start} <=> $b->getGene($b)->{start} } grep { $self->getGene($_)->{chr} eq $chr} $self->genes;
+    my @genes_sorted = sort { $self->getGene($a)->{start} <=> $self->getGene($b)->{start} } grep { $self->getGene($_)->{chr} eq $chr} $self->genes;
     foreach my $gene_id (@genes_sorted) {
       my $gene          = $self->getGene($gene_id);
       my @exons_sorted  = sort { _getExonStart($a) <=> _getExonStart($b) } $self->exons($gene_id);
@@ -486,7 +455,7 @@ sub generateGenome {
             $found_overlap = 1;
           }
         }
-        my $delete_sequence =  substr $chr_entry->{seq},0,$mut->{length},"";
+        $mut->{deleted_sequence} = substr $chr_entry->{seq},0,$mut->{length},"";
         $index  += $mut->{length};
         $offset -= $mut->{length};
       # 3. SUBSTITUTION CASE
@@ -495,15 +464,12 @@ sub generateGenome {
       } elsif ($mut->{type} eq 'sub') {
         my $old_nuc = substr $chr_entry->{seq},0,1,"";
         if($old_nuc eq $mut->{new_nuc}) {
-          carp "Substitution alternative nucleotid was identical to the reference";
+          #carp "Substitution alternative nucleotid was identical to the reference";
         } else {
-
+          $mut->{old_nuc} = $old_nuc;
         }
         $remainder = _printFASTA($fasta_output_fh,$mut->{new_nuc},$remainder) if defined $fasta_output_fh;
         $index++;
-      } elsif ($mut->{type} eq 'fusion') {
-        
-
       } else {
         carp("Unknown mutation type ".$mut->{type});
       }
@@ -528,15 +494,333 @@ sub generateGenome {
   }
 
   # Now we print an extra FASTA file with fusions
+  # TODO fused exons should be either merged into on new exon or separated by some intron,
+  # otherwise, Flux Won't like it
   my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/chrFusions.fa") if defined $fasta_dir;
   print $fasta_output_fh ">chrFusions\n" if defined $fasta_output_fh;
   my $remainder       = 0;
+  my $fusion_id       = 0;
+  my $chr_fusion_pos  = 0;
   foreach my $fusion ($self->fusions) {
     # First we verify that we have the sequences of both part of the fusions
+    # otherwise, one of the chromosome involve in the fusion was not available
     next if !defined $fusion->{sequence_A} || ! defined $fusion->{sequence_B};
+    # We print the fasta sequence corresponding to the fusion
     $remainder = _printFASTA($fasta_output_fh,$fusion->{sequence_A}.$fusion->{sequence_B},$remainder) if defined $fasta_output_fh;
+    # Update the position of the fusion in the "Fusions" chr
+    $fusion->{chr_fusion_pos} = $chr_fusion_pos;
+    # No we update the annotations and print them to the GTF
+    my $fusion_gene_id = "fusion_$fusion_id";
+    my @exons;
+    foreach my $side (('A','B')) {
+      my $fused_gene_id = $fusion->{"gene_$side"};
+      my $fused_gene    = $self->getGene($fused_gene_id);
+      my $fused_exon    = $fusion->{"exon_$side"};
+      my @sorted_exons;
+
+      if($fused_gene->{strand} eq '+') {
+        @sorted_exons = sort { _getExonStart($a) <=> _getExonStart($b) } $self->exons($fused_gene_id);
+      } else {
+        @sorted_exons = sort { _getExonStart($b) <=> _getExonStart($a) } $self->exons($fused_gene_id);
+      }
+
+      foreach my $exon (@sorted_exons) {
+        if(($fused_gene->{strand} eq '+' && $side eq 'A') || 
+           ($fused_gene->{strand} eq '-' && $side eq 'B')) {
+          last if _getExonStart($exon) > _getExonStart($fused_exon);
+        } else {
+          last if _getExonStart($exon) < _getExonStart($fused_exon);
+        }
+
+        my $exon_start;
+        my $exon_length = _getExonEnd($exon) - _getExonStart($exon) + 1; 
+        if($fused_gene->{strand} eq '+') {
+          $exon_start = $chr_fusion_pos + (_getExonStart($exon) - $fusion->{"start_$side"});
+        } else {
+          $exon_start = $chr_fusion_pos + $fusion->{"start_$side"} + length($fusion->{"sequence_$side"}) - 1 - _getExonEnd($exon);
+        }
+
+        my $exon_key    = _getExonKey($exon_start,$exon_start + $exon_length - 1);
+        # If this is the first exon of side B, we merge it into a new exon that is made of the
+        # fusion of the two fused exons
+        if($exon eq $fused_exon && $side eq 'B') {
+          my $new_exon = pop @exons;
+          $new_exon->{end} += $exon_length;
+          push @exons, $new_exon;
+        } else {
+          push @exons, {
+            chr             => "Fusions",
+            feature         => 'exon',
+            start           => $exon_start,
+            end             => $exon_start + $exon_length - 1,
+            strand          => "+",
+            gene_id         => $fusion_gene_id,
+            transcript_ids  => ["$fusion_gene_id.1"],
+          };
+        }
+
+      }
+      # We update the chr fusion pos for the next exon
+      $chr_fusion_pos += $exons[$#exons]->{end} + 1;
+    }
+    $fusion_id++;
+    if(defined $gtf_output_fh) { _printGTF($gtf_output_fh,$_) foreach @exons;}
   }
   close($fasta_output_fh);
+
+  # TODO return of copy of the genomeSimulator
+  my $clone = $self->clone;
+  $clone->generateLiftover;
+  return $clone;
+}
+
+# Create a "frozen" clone of the genome simulator
+sub clone {
+  my $self = shift;
+  my $copy;
+
+  # Copy non-ref objects
+  foreach my $key (keys %$self) {
+    if(!ref $self->{$key}) {
+      $copy->{$key} = $self->{$key};
+    }
+  }
+
+  # Copy references
+  $copy->{genes}      = Storable::dclone($self->{genes});
+  $copy->{mutations}  = Storable::dclone($self->{mutations});
+  $copy->{fusions}    = Storable::dclone($self->{fusions});
+  $copy->{references_length}    = Storable::dclone($self->{references_length});
+  $copy->{reference_sequence_files}    = Storable::dclone($self->{reference_sequence_files});
+  $copy->{frozen}     = 1;
+
+  bless $copy, ref $self;
+  return $copy;
+}
+
+# Generate a liftover interval_query object based on the
+# current mutations.
+sub generateLiftover {
+  my $self = shift;
+  my $liftover_query  = CracTools::Interval::Query->new();
+
+  # Create a liftover object
+  foreach my $chr (sort $self->references) {
+    my $prev_pos        = 0;
+    my $index           = 0; # Index of the original FASTA sequence
+    my $offset          = 0; # Offset difference between the original and the mutated genome
+
+    my @mutations_sorted = sort {$a->{pos} <=> $b->{pos}} grep {$_->{chr} eq $chr} $self->mutations;
+    foreach my $mut (@mutations_sorted) {
+      next if $mut->{type} eq 'sub';
+      $prev_pos   = $index;
+      $index      = $mut->{pos} - $offset;
+      $liftover_query->addInterval($chr,$prev_pos,$index-1,1,{chr => $chr, offset => $offset});
+      if ($mut->{type} eq 'ins') {
+        $prev_pos = $index;
+        $index   += length $mut->{inserted_sequence};
+        $offset  -= length $mut->{inserted_sequence};
+        $liftover_query->addInterval($chr,$prev_pos,$index-1,1,undef);
+      } elsif ($mut->{type} eq 'del') {
+        $offset += $mut->{length};
+      }
+    }
+    # Add the last interval
+    $liftover_query->addInterval($chr,$index,$self->getReferenceLength($chr)-$offset,1,{chr => $chr, offset => $offset});
+  }
+
+  foreach my $fusion ($self->fusions) {
+    my $start_fusion = $fusion->{chr_fusion_pos};
+    foreach my $side (('A','B')) {
+      my $fused_gene = $self->getGene($fusion->{"gene_$side"});
+      my $offset_value;
+      if($fused_gene->{strand} eq '+') {
+        $offset_value = { 
+          chr     => $fused_gene->{chr}, 
+          offset  => $fused_gene->{start} - $start_fusion,
+        };
+      } else {
+        $offset_value = { 
+          chr             => $fused_gene->{chr}, 
+          reverse_offset  => $fused_gene->{end} + $start_fusion,
+        };
+      }
+      $liftover_query->addInterval(
+        "Fusions",
+        $start_fusion,
+        $fusion->{chr_fusion_pos}+length($fusion->{"sequence_$side"}) - 1,
+        1,
+        $offset_value,
+      );
+      $start_fusion += length($fusion->{"sequence_$side"});
+    }
+  }
+
+  $self->{liftover_query} = $liftover_query;
+  return $liftover_query;
+}
+
+# Given an interval over the simulated genome, return
+# the corresponding interval(s) over the reference genome
+# The output is a reference array with entry of type :
+# { chr => $chr, start => $start, end => $end, strand => $strand }
+sub shiftInterval {
+  my $self = shift;
+  my ($chr,$start,$end,$strand) = @_;
+  my @shifted_intervals;
+  my ($shift_intervals,$shift_offsets) = $self->liftoverQuery->fetchByRegion($chr,$start,$end,$strand);
+  # Now we soft the intervals
+  my @sorted_shift_intervals = sort { $shift_intervals->[$a]->{start} <=> $shift_intervals->[$b]->{start} } (0..@{$shift_intervals}-1);
+  foreach my $i (@sorted_shift_intervals) {
+    if(defined $shift_offsets->[$i]) {
+      my ($shifted_start, $shifted_end);
+      my $offset      = $shift_offsets->[$i]->{offset};
+      my $new_strand  = !defined $strand ? '+' : $strand;
+      # If we have an offset, we simply shift coordinates
+      if(defined $offset) {
+        $shifted_start = $start + $offset;
+        $shifted_end   = min($shift_intervals->[$i]->{end} + $offset, $end + $offset);
+      } else {
+        # We have a "reverse_offset", then all calculous are done
+        # the opposite way
+        $offset = $shift_offsets->[$i]->{reverse_offset};
+        $shifted_end   = $offset - $start;
+        $shifted_start = min($offset - $shift_intervals->[$i]->{start}, $offset - $end);
+        $new_strand    = $new_strand eq '+' ? '-' : '+';
+      }
+      my $new_interval = {
+        start   => $shifted_start,
+        end     => $shifted_end,
+        chr     => $shift_offsets->[$i]->{chr},
+        strand  => $new_strand,
+      };
+      $start += $new_interval->{end} - $new_interval->{start} + 1;
+      push @shifted_intervals, $new_interval;
+    }
+  }
+  return \@shifted_intervals;
+}
+
+
+# Given bed that contains alignement,
+# shit the coordinates to match the original genome
+# If a VCF filename is given, also generate this output
+sub shiftAlignements {
+  my $self      = shift;
+  my %args      = @_;
+
+  my $bed_file          = $args{bed_file};
+  my $output_file       = $args{output_file};
+  my $vcf_file          = $args{vcf_file};
+  my $output_fh         = CracTools::Utils::getWritingFileHandle($output_file);
+
+  # Now we open the bed file and we shift the alignements
+  my $bed_it = CracTools::Utils::bedFileIterator($bed_file); 
+  while (my $bed_line = $bed_it->()) {
+    my $new_line = { 
+      chr     => $bed_line->{chr},
+      name    => $bed_line->{name},
+      strand  => $bed_line->{strand},
+      blocks  => [],
+    };
+    #my $start_pos;
+    foreach my $block (@{$bed_line->{blocks}}) {
+      my @shifted_intervals = $self->shiftIntervals($bed_line->{chr},$block->{ref_start},$block->{ref_end});
+      foreach my $shifted_interval (@shifted_intervals) {
+        if(!defined $new_line->{start}) {
+          $new_line->{start}  = $shifted_interval->{start}; 
+          $new_line->{chr}    = $shifted_interval->{chr};
+          $new_line->{strand} = $shifted_interval->{strand};
+        }
+        my $block_start;
+        if($new_line->{chr} eq $shifted_interval->{chr} && $new_line->{strand} eq $shifted_interval->{strand}) {
+          $block_start = $shifted_interval->{start} - $new_line->{start};
+        } else {
+          $block_start = $shifted_interval->{chr}."@".$shifted_interval->{strand}.$shifted_interval->{start};
+        }
+        push @{$new_line->{blocks}}, {
+          size  => $shifted_interval->{end} - $shifted_interval->{start} + 1,
+          start => $block_start,
+        };
+      }
+    }
+    my $nb_blocks = @{$new_line->{blocks}};
+    # Set end position of the alignement using the last block
+    $new_line->{end} = $new_line->{start} + $new_line->{blocks}->[$nb_blocks-1]->{start} + $new_line->{blocks}->[$nb_blocks-1]->{size};
+    _printBED($output_fh,$new_line);
+    # TODO we should construct a SAM file instead
+  }
+}
+
+# PRINT METHODS:
+
+# Write the mutated fasta files
+# @ARG Handle of the output file
+# @ARG String to be outtputted
+# @ARG Number of characters already written on
+#      the current line
+# @RETURN The number of characters printed on the
+#         last line
+sub _printFASTA($$$) {
+  my ($handle, $string, $remainder) = @_;
+  my $current = 0;
+  if ($remainder > 0) {
+    $current = min($CracTools::SimCT::Const::FASTA_LINE_LENGTH-$remainder,length $string);
+    print $handle substr($string, 0, $current);
+    if ($current == length $string) {
+      return length($string)+$remainder;
+    } else {
+      print $handle "\n";
+    }
+  }
+  for (; $current+$CracTools::SimCT::Const::FASTA_LINE_LENGTH <= length $string; $current += $CracTools::SimCT::Const::FASTA_LINE_LENGTH) {
+    print $handle substr($string, $current, $CracTools::SimCT::Const::FASTA_LINE_LENGTH),"\n";
+  }
+  if ($current < length($string)) {
+    print $handle substr($string, $current, length($string)-$current);
+    $remainder = length($string)-$current;
+  } else {
+    $remainder = 0;
+  }
+  return $remainder;
+}
+
+sub _printGTF($$) {
+  my ($fh,$exon) = @_;
+  foreach my $transcript_id (@{$exon->{transcript_ids}}) {
+    print $fh join ("\t",
+      $exon->{chr},       # seqname
+      "GenomeSimulator",  # source
+      "exon",             # feature
+      $exon->{start} + 1, # start
+      $exon->{end} + 1,   # end
+      ".",                # score
+      $exon->{strand},    # strand
+      ".",                # frame
+      join(" ",           # attributes
+        'gene_id "'.$exon->{gene_id}.'";',
+        'transcript_id "'.$transcript_id.'";',
+      ),
+    ), "\n";
+  }
+}
+
+sub _printBED($$) {
+  my ($fh,$bed) = @_;
+  print $fh join("\t",
+    $bed->{chr},
+    $bed->{start},
+    $bed->{end},
+    $bed->{name},
+    0,
+    $bed->{strand},
+    '.',
+    '.',
+    '0,0,0',
+    @{$bed->{blocks}},
+    join(",",map { $_->{size} } @{$bed->{blocks}}),
+    join(",",map { $_->{start} } @{$bed->{blocks}}),
+  ),"\n";
 }
 
 1;

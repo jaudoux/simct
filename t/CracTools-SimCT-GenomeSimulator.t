@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 6;
+use Test::More tests => 23;
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::Utils;
 use Inline::Files 0.68;
@@ -23,7 +23,7 @@ use File::Temp;
 
   # Create the GenomeSimulator
   my $gs = CracTools::SimCT::GenomeSimulator->new(
-    reference_sequence_files => { 1 => $chr1_fasta_file, 2 => $chr2_fasta_file },
+    reference_sequence_files => { 1 => $chr1_fasta_file->filename, 2 => $chr2_fasta_file->filename},
     annotation_file => $gtf_file,
   );
 
@@ -39,14 +39,36 @@ use File::Temp;
   my $genome_dir = File::Temp->newdir();
   my $gtf_output = new File::Temp( SUFFIX => '.gtf' );
 
-  $gs->generateGenome(
+  my $frozen_gs = $gs->generateGenome(
     fasta_dir   => $genome_dir,
     gtf_file    => $gtf_output,
     #gtf_file    => "test.gtf",
   );
 
+  # Verify the frozen GS
+  $gs->addSubstitution("1",1,"C");
+  ok($frozen_gs->mutations != $gs->mutations,"Frozen GS");
+
+  # Verify liftover functions
+  my $shifted_interval = $frozen_gs->shiftInterval("1",15,20);
+  is($shifted_interval->[0]->{start},12,"shiftInterval (1)");
+  is($shifted_interval->[0]->{end},14,"shiftInterval (2)");
+  is($shifted_interval->[1]->{start},25,"shiftInterval (3)");
+  is($shifted_interval->[1]->{end},27,"shiftInterval (4)");
+
+  # Verify liftover functions for fusions
+  $shifted_interval = $frozen_gs->shiftInterval("Fusions",2,10);
+  is($shifted_interval->[0]->{chr},1,"shiftInterval (1)");
+  is($shifted_interval->[0]->{start},11,"shiftInterval (1)");
+  is($shifted_interval->[0]->{end},14,"shiftInterval (2)");
+  is($shifted_interval->[0]->{strand},'+',"shiftInterval (2)");
+  is($shifted_interval->[1]->{chr},2,"shiftInterval (1)");
+  is($shifted_interval->[1]->{start},15,"shiftInterval (1)");
+  is($shifted_interval->[1]->{end},19,"shiftInterval (2)");
+  is($shifted_interval->[1]->{strand},'-',"shiftInterval (2)");
+
   # Verify if fasta is good
-  my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/chr1.fa");
+  my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/1.fa");
   my $entry     = $fasta_it->();
   is($entry->{seq},"ATAGGGGTAGTACGCGTCAGTCT","generateGenome - FASTA control (1)");
   
@@ -57,13 +79,21 @@ use File::Temp;
   is($entry->{seq},"CCCGTCGATCGAGCTAACTAGC","generateGenome - FASTA control (2)");
 
   # Verify if annotations are good
+  #print STDERR $gtf_output,"\n"; sleep 20;
   my $gtf_it        = CracTools::Utils::gffFileIterator($gtf_output,'gtf');
   my $first_exon    = $gtf_it->();
   my $second_exon   = $gtf_it->();
+  my $third_exon    = $gtf_it->();
   is($first_exon->{start},13,"generateGenome - GTF control (1)");
   is($first_exon->{end},18,"generateGenome - GTF control (2)");
   # Exon 2 is supressed by the deletion
   is($second_exon->{chr}, 2,"generateGenome - GTF control (3)"); 
+  my $fusion_exon_1   = $gtf_it->();
+  my $fusion_exon_2   = $gtf_it->();
+  is($fusion_exon_1->{start},1);
+  is($fusion_exon_1->{end},12);
+  is($fusion_exon_2->{start},17);
+  is($fusion_exon_2->{end},22);
 }
 
 __CHR1_FASTA__
