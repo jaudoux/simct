@@ -1,0 +1,89 @@
+#! /usr/bin/perl
+
+use strict;
+use warnings;
+
+#use CracTools::SimCT::App;
+use Getopt::Long qw(:config auto_version); # Get options
+use Pod::Usage;   # Printing pod documentation in terminal
+use File::Spec;
+use Cwd 'abs_path';
+use Data::Dumper;
+
+use CracTools::SimCT::GenomeSimulator;
+use CracTools::SimCT::MutationGenerator::Random;
+use CracTools::SimCT::FluxWrapper;
+
+my ($help,$man,$verbose);
+my ($genome_dir,$annotations,$flux_par,$sub_rate,$ins_rate,$del_rate,$chim_rate);
+my $output_dir = "simulation";
+my $nb_process = 1;
+
+GetOptions( "v|verbose"             => \$verbose,
+            "man"                   => \$man,
+            "help"                  => \$help,
+            "p=i"                   => \$nb_process,
+            "o|output-dir=s"        => \$output_dir,
+            "g|genome-dir=s"        => \$genome_dir,
+            "a|annotations=s"       => \$annotations,
+            "f|flux-parameters=s"   => \$flux_par,
+            "s|substitution-rate=f" => \$sub_rate,
+            "i|insertion-rate=f"    => \$ins_rate,
+            "d|deletion-rate=f"     => \$del_rate,
+            "c|chimeric-rate=f"     => \$chim_rate,
+          ) or pod2usage(-verbose => 1);
+
+pod2usage(-verbose => 1)  if ($help);
+pod2usage(-verbose => 2)  if ($man);
+
+# Create an output directory if not defined
+mkdir $output_dir;
+
+opendir(GEN,$genome_dir) or die "Can't open $genome_dir: $!";
+my %reference_sequence_files = map { (my $chr = $_) =~ /(?:chr)?(\S+)\.fa$/ => File::Spec->catfile($genome_dir,$_) } grep{ /\.fa$/ } readdir(GEN);
+closedir(GEN);
+
+print STDERR Dumper(\%reference_sequence_files);
+
+print STDERR "Building GenomeSimulator (reading annotations)\n";
+my $genome_simulator = CracTools::SimCT::GenomeSimulator->new(
+  reference_sequence_files  => \%reference_sequence_files,
+  annotation_file           => $annotations,
+);
+
+my $mutation_generator = CracTools::SimCT::MutationGenerator::Random->new(
+  genome_simulator  => $genome_simulator,
+  ins_rate          => $ins_rate,
+  del_rate          => $del_rate,
+  sub_rate          => $sub_rate,
+);
+
+print STDERR "Generate random mutations\n";
+$mutation_generator->generateMutations();
+
+# Make a directory for the simulated genome
+print STDERR "Generate the simulated genome as FASTA and GTF\n";
+my $simulated_genome_dir  = File::Spec->catfile($output_dir,"simulated_genome");
+my $simulated_annotations = File::Spec->catfile($simulated_genome_dir,"annotations.gtf");
+mkdir $simulated_genome_dir;
+my $frozen_gz = $genome_simulator->generateGenome(
+  fasta_dir => $simulated_genome_dir,
+  gtf_file  => $simulated_annotations,
+);
+
+my $flux_wrapper    = CracTools::SimCT::FluxWrapper->new();
+my $flux_output_dir = File::Spec->catfile($output_dir,"flux_simulation");
+mkdir $flux_output_dir;
+my $flux_outputs = $flux_wrapper->generateSimulation(
+  genome_dir      => abs_path($simulated_genome_dir),
+  annotation_file => abs_path($simulated_annotations),
+  output_dir      => $flux_output_dir,
+  flux_parameters => {
+    POLYA_SHAPE   => 'NaN',
+    TSS_MEAN      => 'NaN',
+    READ_NUMBER   => 100000,
+    READ_LENGTH   => 100,
+    PAIRED_END    => 'YES',
+    NB_MOLECULES  => 100000,
+  },
+);
