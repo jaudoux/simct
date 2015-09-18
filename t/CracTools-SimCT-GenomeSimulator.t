@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 23;
+use Test::More tests => 37;
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::Utils;
 use Inline::Files 0.68;
@@ -35,6 +35,8 @@ use File::Temp;
   $gs->addInsertion("1",2,"AGG");
   # Create a fusion gene with the first exon of geneA and the second exon of geneB
   $gs->addFusion('geneA','9,14','geneB','14,19');
+  $gs->addFusion('geneA','19,24','geneA','9,14');
+  $gs->addFusion('geneB','4,9','geneA','9,14');
 
   my $genome_dir = File::Temp->newdir();
   my $gtf_output = new File::Temp( SUFFIX => '.gtf' );
@@ -76,7 +78,13 @@ use File::Temp;
   $entry     = $fasta_it->();
   # GeneA, exon1: CCCGTC
   # GeneB, exon1-exon2: GCTAGTTAGCTCGATC => GATCGAGCTAACTAGC
-  is($entry->{seq},"CCCGTCGATCGAGCTAACTAGC","generateGenome - FASTA control (2)");
+  my $fusion_1 = "CCCGTCGATCGAGCTAACTAGC";
+  ok($entry->{seq} =~ /^$fusion_1/,"generateGenome - FASTA control (2)");
+  # Check second fusion
+  my $fusion_2 = "(CCCGTCGCATGTCGAA){2}";
+  ok($entry->{seq} =~ /^($fusion_1)($fusion_2)/,"fusion sequence");
+  my $fusion_3 = "GATCGAGCTAACTAGCCCCGTCGCATGTCGAA";
+  ok($entry->{seq} =~ /^($fusion_1)($fusion_2)($fusion_3)/,"fusion sequence");
 
   # Verify if annotations are good
   #print STDERR $gtf_output,"\n"; sleep 20;
@@ -88,12 +96,39 @@ use File::Temp;
   is($first_exon->{end},18,"generateGenome - GTF control (2)");
   # Exon 2 is supressed by the deletion
   is($second_exon->{chr}, 2,"generateGenome - GTF control (3)"); 
-  my $fusion_exon_1   = $gtf_it->();
-  my $fusion_exon_2   = $gtf_it->();
-  is($fusion_exon_1->{start},1);
-  is($fusion_exon_1->{end},12);
-  is($fusion_exon_2->{start},17);
-  is($fusion_exon_2->{end},22);
+  # Check the first fusion
+  {
+    my $fusion_exon_1   = $gtf_it->();
+    my $fusion_exon_2   = $gtf_it->();
+    is($fusion_exon_1->{start},1);
+    is($fusion_exon_1->{end},12);
+    is($fusion_exon_2->{start},17);
+    is($fusion_exon_2->{end},22);
+  }
+  # Check the second fusion
+  {
+    my $fusion_exon_1   = $gtf_it->();
+    my $fusion_exon_2   = $gtf_it->();
+    my $fusion_exon_3   = $gtf_it->();
+    is($fusion_exon_1->{start},23);
+    is($fusion_exon_1->{end},28);
+    is($fusion_exon_2->{start},33);
+    is($fusion_exon_2->{end},44);
+    is($fusion_exon_3->{start},49);
+    is($fusion_exon_3->{end},54);
+  }
+  # Check the third fusion
+  {
+    my $fusion_exon_1   = $gtf_it->();
+    my $fusion_exon_2   = $gtf_it->();
+    my $fusion_exon_3   = $gtf_it->();
+    is($fusion_exon_1->{start},55);
+    is($fusion_exon_1->{end},60);
+    is($fusion_exon_2->{start},65);
+    is($fusion_exon_2->{end},76);
+    is($fusion_exon_3->{start},81);
+    is($fusion_exon_3->{end},86);
+  }
 }
 
 __CHR1_FASTA__

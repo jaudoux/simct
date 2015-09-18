@@ -1,0 +1,6 @@
+- We should be able to run the pipeline step separatly if we want
+- Output should be compressed to GZIP
+
+# TODO
+- Add SAM support for alignements
+- Add 

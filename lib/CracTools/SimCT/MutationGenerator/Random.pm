@@ -13,7 +13,7 @@ use CracTools::SimCT::Const;
 
 sub _init {
   my $self = shift;
-  my %args = @_;
+  my $args = shift;
   
   # Mutation rates
   $self->{mutation_rates} = {
@@ -22,13 +22,13 @@ sub _init {
     del => $CracTools::SimCT::Const::DEL_RATE,
   };
   # If user define its mutation rate we update them
-  $self->setMutationRate('ins',$args{ins_rate}) if defined $args{ins_rate};
-  $self->setMutationRate('del',$args{del_rate}) if defined $args{del_rate};
-  $self->setMutationRate('sub',$args{sub_rate}) if defined $args{sub_rate};
+  $self->setMutationRate('ins',$args->{ins_rate}) if defined $args->{ins_rate};
+  $self->setMutationRate('del',$args->{del_rate}) if defined $args->{del_rate};
+  $self->setMutationRate('sub',$args->{sub_rate}) if defined $args->{sub_rate};
 
   # Insertion and deletion length
-  $self->{max_ins} = defined $args{max_ins}? $args{max_ins} : $CracTools::SimCT::Const::MAX_INS;
-  $self->{max_del} = defined $args{max_del}? $args{max_del} : $CracTools::SimCT::Const::MAX_DEL;
+  $self->{max_ins} = defined $args->{max_ins}? $args->{max_ins} : $CracTools::SimCT::Const::MAX_INS;
+  $self->{max_del} = defined $args->{max_del}? $args->{max_del} : $CracTools::SimCT::Const::MAX_DEL;
 }
 
 sub setMutationRate {

@@ -12,10 +12,11 @@ use Data::Dumper;
 
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::SimCT::MutationGenerator::Random;
+use CracTools::SimCT::MutationGenerator::Fusion;
 use CracTools::SimCT::FluxWrapper;
 
 my ($help,$man,$verbose);
-my ($genome_dir,$annotations,$flux_par,$sub_rate,$ins_rate,$del_rate,$chim_rate);
+my ($genome_dir,$annotations,$flux_par,$sub_rate,$ins_rate,$del_rate,$nb_fusions);
 my $output_dir = "simulation";
 my $nb_process = 1;
 
@@ -30,11 +31,21 @@ GetOptions( "v|verbose"             => \$verbose,
             "s|substitution-rate=f" => \$sub_rate,
             "i|insertion-rate=f"    => \$ins_rate,
             "d|deletion-rate=f"     => \$del_rate,
-            "c|chimeric-rate=f"     => \$chim_rate,
+            "f|nb-fusions=i"        => \$nb_fusions,
           ) or pod2usage(-verbose => 1);
 
 pod2usage(-verbose => 1)  if ($help);
 pod2usage(-verbose => 2)  if ($man);
+
+pod2usage(
+  -message => "Mandatory argument '-genome-dir' is missing",
+  -verbose => 1,
+) unless defined $genome_dir;
+
+pod2usage(
+  -message => "Mandatory argument '-annotations' is missing",
+  -verbose => 1,
+) unless defined $annotations;
 
 # Create an output directory if not defined
 mkdir $output_dir;
@@ -58,15 +69,24 @@ my $mutation_generator = CracTools::SimCT::MutationGenerator::Random->new(
   sub_rate          => $sub_rate,
 );
 
-print STDERR "Generate random mutations\n";
+print STDERR "Generate random mutations (ins,del,sub)\n";
 $mutation_generator->generateMutations();
+
+if(defined $nb_fusions) {
+  my $fusion_generator = CracTools::SimCT::MutationGenerator::Fusion->new(
+    genome_simulator  => $genome_simulator,
+  );
+
+  print STDERR "Generate random fusions\n";
+  $fusion_generator->generateMutations($nb_fusions);
+}
 
 # Make a directory for the simulated genome
 print STDERR "Generate the simulated genome as FASTA and GTF\n";
 my $simulated_genome_dir  = File::Spec->catfile($output_dir,"simulated_genome");
 my $simulated_annotations = File::Spec->catfile($simulated_genome_dir,"annotations.gtf");
 mkdir $simulated_genome_dir;
-my $frozen_gz = $genome_simulator->generateGenome(
+my $frozen_gs = $genome_simulator->generateGenome(
   fasta_dir => $simulated_genome_dir,
   gtf_file  => $simulated_annotations,
 );
@@ -86,4 +106,13 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
     PAIRED_END    => 'YES',
     NB_MOLECULES  => 100000,
   },
+);
+
+
+my $alignements_bed = File::Spec->catfile($output_dir,"alignments.bed");
+my $mutations_vcf   = File::Spec->catfile($output_dir,"mutations.vcf");
+$frozen_gs->shiftAlignements(
+  bed_file    => $flux_outputs->{sequencing_file},
+  output_file => $alignements_bed,
+  vcf_file    => $mutations_vcf,
 );

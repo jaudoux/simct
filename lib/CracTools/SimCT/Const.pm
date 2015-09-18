@@ -14,5 +14,6 @@ our $FASTA_LINE_LENGTH    = 60;
 our $DEBUG                = 0;
 our $FLUX_BINARY          = 'flux-simulator';
 our $FLUX_OUTPUT_BASENAME = "fluxSimulator";
+our $CHR_FUSIONS          = "Fusions";
 
 1;

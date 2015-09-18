@@ -9,6 +9,9 @@ use Carp;
 use Storable; # In order to clone the GenomeSimulator
 use Data::Dumper;
 
+require 5.004;
+use Tie::RefHash;
+
 use CracTools::Utils;
 use CracTools::GenomeMask;
 use CracTools::Interval::Query;
@@ -89,27 +92,27 @@ sub _init {
   }
 
   # We remove from the annotations, overlapping genes and exons
-  my @gene_ids = sort { $self->getGene($a)->{chr} cmp $self->getGene($b)->{chr} || $self->getGene($a)->{start} <=> $self->getGene($b)->{start}} $self->genes;
-  my $prev_gene_id = shift @gene_ids;
-  foreach my $gene_id (@gene_ids) {
-    my $prev_gene = $self->getGene($prev_gene_id);
-    my $gene = $self->getGene($gene_id);
-    if($gene->{chr} eq $prev_gene->{chr} && $gene->{start} <= $prev_gene->{end}) {
-      $self->removeGene($gene_id);
-    } else {
-      # Sort exons by start position to remove overlapping ones
-      my @exons_ids = sort { _getExonStart($a) <=> _getExonStart($b) } $self->{exons};
-      my $prev_exon_id = shift @exons_ids;
-      foreach my $exon_id (@exons_ids) {
-        if(_getExonStart($exon_id) <= _getExonEnd($prev_exon_id)) {
-          $self->removeExon($gene_id,$exon_id);
-        } else {
-          $prev_exon_id = $exon_id;
-        }
-      }
-      $prev_gene_id = $gene_id;
-    }
-  }
+  #my @gene_ids = sort { $self->getGene($a)->{chr} cmp $self->getGene($b)->{chr} || $self->getGene($a)->{start} <=> $self->getGene($b)->{start}} $self->genes;
+  #my $prev_gene_id;# = shift @gene_ids;
+  #foreach my $gene_id (@gene_ids) {
+  #  my $prev_gene = $self->getGene($prev_gene_id);
+  #  my $gene = $self->getGene($gene_id);
+  #  if(defined $prev_gene && $gene->{chr} eq $prev_gene->{chr} && $gene->{start} <= $prev_gene->{end}) {
+  #    $self->removeGene($gene_id);
+  #  } else {
+  #    # Sort exons by start position to remove overlapping ones
+  #    my @exons_ids = sort { _getExonStart($a) <=> _getExonStart($b) } $self->exons($gene_id);
+  #    my $prev_exon_id = shift @exons_ids;
+  #    foreach my $exon_id (@exons_ids) {
+  #      if(_getExonStart($exon_id) <= _getExonEnd($prev_exon_id)) {
+  #        $self->removeExon($gene_id,$exon_id);
+  #      } else {
+  #        $prev_exon_id = $exon_id;
+  #      }
+  #    }
+  #    $prev_gene_id = $gene_id;
+  #  }
+  #}
 }
 
 # Return the annotation filename
@@ -251,23 +254,26 @@ sub addFusion {
   my ($gene_A_id, $exon_A_id, $gene_B_id, $exon_B_id) = @_;
   my $gene_A = $self->getGene($gene_A_id);
   my $gene_B = $self->getGene($gene_B_id);
+  # TODO a fusion mutation should have "Fusions" as chr
+  # and chr_pos_fusion as position
   if(defined $gene_A && defined $gene_B) {
-    push @{$self->{fusions}}, {
+    push @{$self->{mutations}}, {
+      chr     => $CracTools::SimCT::Const::CHR_FUSIONS,
+      pos     => 0,
+      type    => 'fusion',
       gene_A  => $gene_A_id,
       exon_A  => $exon_A_id,
       gene_B  => $gene_B_id,
       exon_B  => $exon_B_id
     };
+    return 1;
   }
+  return 0;
 }
 
 sub fusions {
   my $self = shift;
-  if(defined $self->{fusions}) {
-    return @{$self->{fusions}};
-  } else {
-    return ();
-  }
+  return grep { $_->{type} eq 'fusion' } $self->mutations;
 }
 
 # Return an array with all the mutations
@@ -276,11 +282,16 @@ sub mutations {
   return @{$self->{mutations}};
 }
 
-
 sub liftoverQuery {
   my $self = shift;
   $self->generateLiftover if !defined $self->{liftover_query};
   return $self->{liftover_query};
+}
+
+sub mutationQuery {
+  my $self = shift;
+  $self->generateLiftover if !defined $self->{mutation_query};
+  return $self->{mutation_query};
 }
 
 # Create a hash key from exon coordinates
@@ -471,7 +482,7 @@ sub generateGenome {
         $remainder = _printFASTA($fasta_output_fh,$mut->{new_nuc},$remainder) if defined $fasta_output_fh;
         $index++;
       } else {
-        carp("Unknown mutation type ".$mut->{type});
+        #carp("Unknown mutation type ".$mut->{type});
       }
       #CracTools::Utils::writeSeq($filehandle,$format,$seq_name,$seq,$seq_qual)
     }
@@ -496,8 +507,8 @@ sub generateGenome {
   # Now we print an extra FASTA file with fusions
   # TODO fused exons should be either merged into on new exon or separated by some intron,
   # otherwise, Flux Won't like it
-  my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/chrFusions.fa") if defined $fasta_dir;
-  print $fasta_output_fh ">chrFusions\n" if defined $fasta_output_fh;
+  my $fasta_output_fh = CracTools::Utils::getWritingFileHandle("$fasta_dir/chr$CracTools::SimCT::Const::CHR_FUSIONS.fa") if defined $fasta_dir;
+  print $fasta_output_fh ">chr$CracTools::SimCT::Const::CHR_FUSIONS\n" if defined $fasta_output_fh;
   my $remainder       = 0;
   my $fusion_id       = 0;
   my $chr_fusion_pos  = 0;
@@ -507,7 +518,7 @@ sub generateGenome {
     next if !defined $fusion->{sequence_A} || ! defined $fusion->{sequence_B};
     # We print the fasta sequence corresponding to the fusion
     $remainder = _printFASTA($fasta_output_fh,$fusion->{sequence_A}.$fusion->{sequence_B},$remainder) if defined $fasta_output_fh;
-    # Update the position of the fusion in the "Fusions" chr
+    # Update the position of the fusion in the "$CracTools::SimCT::Const::CHR_FUSIONS" chr
     $fusion->{chr_fusion_pos} = $chr_fusion_pos;
     # No we update the annotations and print them to the GTF
     my $fusion_gene_id = "fusion_$fusion_id";
@@ -521,15 +532,23 @@ sub generateGenome {
       if($fused_gene->{strand} eq '+') {
         @sorted_exons = sort { _getExonStart($a) <=> _getExonStart($b) } $self->exons($fused_gene_id);
       } else {
-        @sorted_exons = sort { _getExonStart($b) <=> _getExonStart($a) } $self->exons($fused_gene_id);
+        @sorted_exons = sort { _getExonEnd($b) <=> _getExonEnd($a) } $self->exons($fused_gene_id);
       }
 
       foreach my $exon (@sorted_exons) {
-        if(($fused_gene->{strand} eq '+' && $side eq 'A') || 
-           ($fused_gene->{strand} eq '-' && $side eq 'B')) {
-          last if _getExonStart($exon) > _getExonStart($fused_exon);
+        # Skip exon or stop fusion, depending on the side and the strand
+        if($side eq 'A') {
+          if($fused_gene->{strand} eq '+') {
+            next if _getExonEnd($exon) > _getExonEnd($fused_exon);
+          } else {
+            next if _getExonStart($exon) < _getExonStart($fused_exon);
+          }
         } else {
-          last if _getExonStart($exon) < _getExonStart($fused_exon);
+          if($fused_gene->{strand} eq '+') {
+            next if _getExonStart($exon) < _getExonStart($fused_exon);
+          } else {
+            next if _getExonEnd($exon) > _getExonEnd($fused_exon);
+          }
         }
 
         my $exon_start;
@@ -540,16 +559,14 @@ sub generateGenome {
           $exon_start = $chr_fusion_pos + $fusion->{"start_$side"} + length($fusion->{"sequence_$side"}) - 1 - _getExonEnd($exon);
         }
 
-        my $exon_key    = _getExonKey($exon_start,$exon_start + $exon_length - 1);
+        #my $exon_key    = _getExonKey($exon_start,$exon_start + $exon_length - 1);
         # If this is the first exon of side B, we merge it into a new exon that is made of the
         # fusion of the two fused exons
         if($exon eq $fused_exon && $side eq 'B') {
-          my $new_exon = pop @exons;
-          $new_exon->{end} += $exon_length;
-          push @exons, $new_exon;
+          $exons[$#exons]->{end} += $exon_length;
         } else {
           push @exons, {
-            chr             => "Fusions",
+            chr             => "$CracTools::SimCT::Const::CHR_FUSIONS",
             feature         => 'exon',
             start           => $exon_start,
             end             => $exon_start + $exon_length - 1,
@@ -558,10 +575,9 @@ sub generateGenome {
             transcript_ids  => ["$fusion_gene_id.1"],
           };
         }
-
       }
       # We update the chr fusion pos for the next exon
-      $chr_fusion_pos += $exons[$#exons]->{end} + 1;
+      $chr_fusion_pos = $exons[$#exons]->{end} + 1;
     }
     $fusion_id++;
     if(defined $gtf_output_fh) { _printGTF($gtf_output_fh,$_) foreach @exons;}
@@ -602,7 +618,12 @@ sub clone {
 # current mutations.
 sub generateLiftover {
   my $self = shift;
+
+  # Liftover object
   my $liftover_query  = CracTools::Interval::Query->new();
+
+  # Place mutations in an CracTools::Interval::Query object to check their presence
+  my $mutation_query  = CracTools::Interval::Query->new();
 
   # Create a liftover object
   foreach my $chr (sort $self->references) {
@@ -612,16 +633,26 @@ sub generateLiftover {
 
     my @mutations_sorted = sort {$a->{pos} <=> $b->{pos}} grep {$_->{chr} eq $chr} $self->mutations;
     foreach my $mut (@mutations_sorted) {
-      next if $mut->{type} eq 'sub';
-      $prev_pos   = $index;
-      $index      = $mut->{pos} - $offset;
-      $liftover_query->addInterval($chr,$prev_pos,$index-1,1,{chr => $chr, offset => $offset});
-      if ($mut->{type} eq 'ins') {
+
+      # If we have an insertion or a deletion we add the current interval to the liftover query
+      if($mut->{type} =~ /^(ins|del)$/) {
+        $prev_pos   = $index;
+        $index      = $mut->{pos} - $offset;
+        $liftover_query->addInterval($chr,$prev_pos,$index-1,1,{chr => $chr, offset => $offset}) if $index > $prev_pos;
+      }
+  
+      if ($mut->{type} eq 'sub') {
+        $mutation_query->addInterval($mut->{chr},$mut->{pos}+$offset,$mut->{pos}+$offset,1,$mut);
+      } elsif ($mut->{type} eq 'ins') {
+        $mutation_query->addInterval($mut->{chr},$mut->{pos}+$offset,$mut->{pos}+$offset,1,$mut);
+        # If we have an insertion, first we add an undef interval
+        # That correspond to the insertion
         $prev_pos = $index;
         $index   += length $mut->{inserted_sequence};
         $offset  -= length $mut->{inserted_sequence};
         $liftover_query->addInterval($chr,$prev_pos,$index-1,1,undef);
       } elsif ($mut->{type} eq 'del') {
+        $mutation_query->addInterval($mut->{chr},$mut->{pos}+$offset,$mut->{pos}+$offset+$mut->{length}-1,1,$mut);
         $offset += $mut->{length};
       }
     }
@@ -629,8 +660,10 @@ sub generateLiftover {
     $liftover_query->addInterval($chr,$index,$self->getReferenceLength($chr)-$offset,1,{chr => $chr, offset => $offset});
   }
 
+  # Add fusions in the liftover query
   foreach my $fusion ($self->fusions) {
     my $start_fusion = $fusion->{chr_fusion_pos};
+    $mutation_query->addInterval("$CracTools::SimCT::Const::CHR_FUSIONS",$start_fusion,$start_fusion,1,$fusion);
     foreach my $side (('A','B')) {
       my $fused_gene = $self->getGene($fusion->{"gene_$side"});
       my $offset_value;
@@ -646,9 +679,9 @@ sub generateLiftover {
         };
       }
       $liftover_query->addInterval(
-        "Fusions",
+        "$CracTools::SimCT::Const::CHR_FUSIONS",
         $start_fusion,
-        $fusion->{chr_fusion_pos}+length($fusion->{"sequence_$side"}) - 1,
+        $start_fusion+length($fusion->{"sequence_$side"}) - 1,
         1,
         $offset_value,
       );
@@ -657,7 +690,7 @@ sub generateLiftover {
   }
 
   $self->{liftover_query} = $liftover_query;
-  return $liftover_query;
+  $self->{mutation_query} = $mutation_query;
 }
 
 # Given an interval over the simulated genome, return
@@ -712,20 +745,31 @@ sub shiftAlignements {
   my $bed_file          = $args{bed_file};
   my $output_file       = $args{output_file};
   my $vcf_file          = $args{vcf_file};
+  my $chimera_file      = $args{chimera_file};
+
   my $output_fh         = CracTools::Utils::getWritingFileHandle($output_file);
+  my $vcf_fh            = CracTools::Utils::getWritingFileHandle($vcf_file);
+
+  # Hold mutations and count
+  tie my %overlapped_mutations, 'Tie::RefHash';
 
   # Now we open the bed file and we shift the alignements
   my $bed_it = CracTools::Utils::bedFileIterator($bed_file); 
   while (my $bed_line = $bed_it->()) {
     my $new_line = { 
-      chr     => $bed_line->{chr},
+      chr     => $bed_line->{chr}, # TODO special treatment for fusions
       name    => $bed_line->{name},
       strand  => $bed_line->{strand},
       blocks  => [],
     };
-    #my $start_pos;
+    # We loop over each block of the bed alignement
     foreach my $block (@{$bed_line->{blocks}}) {
-      my @shifted_intervals = $self->shiftIntervals($bed_line->{chr},$block->{ref_start},$block->{ref_end});
+      # First we get shifted intervals
+      my @shifted_intervals = @{$self->shiftInterval(
+        $bed_line->{chr},
+        $block->{ref_start},
+        $block->{ref_end},
+      )};
       foreach my $shifted_interval (@shifted_intervals) {
         if(!defined $new_line->{start}) {
           $new_line->{start}  = $shifted_interval->{start}; 
@@ -733,22 +777,48 @@ sub shiftAlignements {
           $new_line->{strand} = $shifted_interval->{strand};
         }
         my $block_start;
-        if($new_line->{chr} eq $shifted_interval->{chr} && $new_line->{strand} eq $shifted_interval->{strand}) {
+        # If this block is collinear with the bed_line genomic coordinate
+        # we only update the block_start according to the line start
+        if($new_line->{chr} eq $shifted_interval->{chr} &&
+          $new_line->{strand} eq $shifted_interval->{strand}) {
           $block_start = $shifted_interval->{start} - $new_line->{start};
+        # Otherwise it is a chimeric alignment and we have to put some
+        # dirty things in the bed alignment
         } else {
           $block_start = $shifted_interval->{chr}."@".$shifted_interval->{strand}.$shifted_interval->{start};
         }
-        push @{$new_line->{blocks}}, {
-          size  => $shifted_interval->{end} - $shifted_interval->{start} + 1,
-          start => $block_start,
-        };
+        # If the prev block is glued to this one (due to a deletion)
+        # we merge them into one block.
+        my $prev_block = @{$new_line->{blocks}}? $new_line->{blocks}->[$#{$new_line->{blocks}}]: undef;
+        if(defined $prev_block && $prev_block->{start}+$prev_block->{size} == $block_start) {
+          $prev_block->{size} += $shifted_interval->{end} - $shifted_interval->{start} + 1,
+        # Otherwise we add a new block
+        } else {
+          push @{$new_line->{blocks}}, {
+            size  => $shifted_interval->{end} - $shifted_interval->{start} + 1,
+            start => $block_start,
+          };
+        }
       }
+      # Then we get overlapped mutations
+      map { $overlapped_mutations{$_}++ } @{$self->mutationQuery->fetchByRegion(
+        $bed_line->{chr},
+        $block->{ref_start},
+        $block->{ref_end},
+      )};
     }
     my $nb_blocks = @{$new_line->{blocks}};
     # Set end position of the alignement using the last block
     $new_line->{end} = $new_line->{start} + $new_line->{blocks}->[$nb_blocks-1]->{start} + $new_line->{blocks}->[$nb_blocks-1]->{size};
     _printBED($output_fh,$new_line);
     # TODO we should construct a SAM file instead
+  }
+  # Now we write a vcf file with expressed mutations
+  if(defined $vcf_fh) {
+    foreach my $mut (keys %overlapped_mutations) {
+      next if $mut->{type} !~ /^(sub|ins|del)$/;
+      print $vcf_fh join("\t",$mut->{type},$mut->{chr},$mut->{pos},$overlapped_mutations{$mut}),"\n";
+    }
   }
 }
 
@@ -817,10 +887,27 @@ sub _printBED($$) {
     '.',
     '.',
     '0,0,0',
-    @{$bed->{blocks}},
     join(",",map { $_->{size} } @{$bed->{blocks}}),
     join(",",map { $_->{start} } @{$bed->{blocks}}),
   ),"\n";
 }
+
+#sub _printVCF($) {
+#  my ($fh,$mut,$count) = @_;
+#  print $fh join("\t",
+#    $bed->{chr},
+#    $bed->{start},
+#    $bed->{end},
+#    $bed->{name},
+#    0,
+#    $bed->{strand},
+#    '.',
+#    '.',
+#    '0,0,0',
+#    @{$bed->{blocks}},
+#    join(",",map { $_->{size} } @{$bed->{blocks}}),
+#    join(",",map { $_->{start} } @{$bed->{blocks}}),
+#  ),"\n";
+#}
 
 1;
