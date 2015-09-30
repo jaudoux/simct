@@ -504,6 +504,10 @@ sub generateGenome {
     if(defined $gtf_output_fh) { _printGTF($gtf_output_fh,$_) foreach grep {!defined $_->{deleted}} @exons;}
   }
 
+  # Remove false substitution
+  my @cleaned_mutations = grep { !($_->{type} eq 'sub' && !defined $_->{old_nuc}) } $self->mutations;
+  $self->{mutations} = \@cleaned_mutations;
+
   # Now we print an extra FASTA file with fusions
   # TODO fused exons should be either merged into on new exon or separated by some intron,
   # otherwise, Flux Won't like it
@@ -750,7 +754,8 @@ sub shiftAlignements {
   my $output_fh         = CracTools::Utils::getWritingFileHandle($output_file);
   my $vcf_fh            = CracTools::Utils::getWritingFileHandle($vcf_file);
 
-  # Hold mutations and count
+  # Hold mutations and count, we use 'Tie::RefHash' to use mutations (hash)
+  # as hash keys
   tie my %overlapped_mutations, 'Tie::RefHash';
 
   # Now we open the bed file and we shift the alignements
@@ -801,7 +806,7 @@ sub shiftAlignements {
         }
       }
       # Then we get overlapped mutations
-      map { $overlapped_mutations{$_}++ } @{$self->mutationQuery->fetchByRegion(
+      map { push(@{$overlapped_mutations{$_}},$bed_line->{name}) } @{$self->mutationQuery->fetchByRegion(
         $bed_line->{chr},
         $block->{ref_start},
         $block->{ref_end},
@@ -815,9 +820,30 @@ sub shiftAlignements {
   }
   # Now we write a vcf file with expressed mutations
   if(defined $vcf_fh) {
-    foreach my $mut (keys %overlapped_mutations) {
+    foreach my $mut (sort { $a->{pos} <=> $b->{pos} } keys %overlapped_mutations) {
       next if $mut->{type} !~ /^(sub|ins|del)$/;
-      print $vcf_fh join("\t",$mut->{type},$mut->{chr},$mut->{pos},$overlapped_mutations{$mut}),"\n";
+      my $vcf_line = {
+        chr => $mut->{chr},
+        pos => $mut->{pos},
+        id  => join(',',@{$overlapped_mutations{$mut}}),
+        info => {
+          DP => [scalar @{$overlapped_mutations{$mut}}],
+        },
+      };
+      if($mut->{type} eq 'sub') {
+        $vcf_line->{ref} = $mut->{old_nuc};
+        $vcf_line->{alt} = $mut->{new_nuc};
+      } elsif($mut->{type} eq 'ins') {
+        $vcf_line->{ref} = "N";
+        $vcf_line->{alt} = "N".$mut->{inserted_sequence};
+        $vcf_line->{pos}--;
+      } elsif($mut->{type} eq 'del') {
+        $vcf_line->{ref} = "N".$mut->{deleted_sequence};
+        $vcf_line->{alt} = "N";
+        $vcf_line->{pos}--;
+      }
+      _printVCF($vcf_fh,$vcf_line);
+      #  print $vcf_fh join("\t",$mut->{type},$mut->{chr},$mut->{pos},$overlapped_mutations{$mut}),"\n";
     }
   }
 }
@@ -892,22 +918,18 @@ sub _printBED($$) {
   ),"\n";
 }
 
-#sub _printVCF($) {
-#  my ($fh,$mut,$count) = @_;
-#  print $fh join("\t",
-#    $bed->{chr},
-#    $bed->{start},
-#    $bed->{end},
-#    $bed->{name},
-#    0,
-#    $bed->{strand},
-#    '.',
-#    '.',
-#    '0,0,0',
-#    @{$bed->{blocks}},
-#    join(",",map { $_->{size} } @{$bed->{blocks}}),
-#    join(",",map { $_->{start} } @{$bed->{blocks}}),
-#  ),"\n";
-#}
+sub _printVCF($) {
+  my ($fh,$vcf) = @_;
+  print $fh join("\t",
+    $vcf->{chr},
+    $vcf->{pos},
+    $vcf->{id},
+    $vcf->{ref},
+    $vcf->{alt},
+    '.',
+    'PASS',
+    join(";",map { $_."=".join(',',@{$vcf->{info}->{$_}})  } keys %{$vcf->{info}}),
+  ),"\n";
+}
 
 1;
