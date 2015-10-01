@@ -1,6 +1,8 @@
-- We should be able to run the pipeline step separatly if we want
-- Output should be compressed to GZIP
 
 # TODO
-- Add SAM support for alignements
-- Add 
+- Add SAM support for alignements or alignment should be encoded in reads names?
+- Add a mutation generator that is based on a VCF file
+- Find a syntax for generating a simulated experiment (in YAML if possible)
+- We should be able to run the pipeline step separatly if we want
+- Output should be compressed to GZIP
+- Break the genomeSimulator in more pieces...
