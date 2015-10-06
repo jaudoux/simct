@@ -1,95 +1,87 @@
-use strict;
-use warnings;
-
 package CracTools::SimCT::MutationGenerator::Random;  
 # ABSTRACT: A mutation generator that introduce random mutations ('ins','del','sub')
 
-use parent 'CracTools::SimCT::MutationGenerator';
-
-use Carp;
+use Moose;
 
 use CracTools::Const;
 use CracTools::SimCT::Const;
+use CracTools::SimCT::Mutation::Insertion;
+use CracTools::SimCT::Mutation::Deletion;
+use CracTools::SimCT::Mutation::Substitution;
 
-sub _init {
-  my $self = shift;
-  my $args = shift;
-  
-  # Mutation rates
-  $self->{mutation_rates} = {
-    sub => $CracTools::SimCT::Const::SUB_RATE,
-    ins => $CracTools::SimCT::Const::INS_RATE,
-    del => $CracTools::SimCT::Const::DEL_RATE,
-  };
-  # If user define its mutation rate we update them
-  $self->setMutationRate('ins',$args->{ins_rate}) if defined $args->{ins_rate};
-  $self->setMutationRate('del',$args->{del_rate}) if defined $args->{del_rate};
-  $self->setMutationRate('sub',$args->{sub_rate}) if defined $args->{sub_rate};
+# Mutation rates
+has 'ins_rate' => (
+  is => 'rw',
+  isa => 'Num',
+  default => $CracTools::SimCT::Const::INS_RATE,
+);
+has 'del_rate' => (
+  is => 'rw',
+  isa => 'Num',
+  default => $CracTools::SimCT::Const::DEL_RATE,
+);
+has 'sub_rate' => (
+  is => 'rw',
+  isa => 'Num', 
+  default => $CracTools::SimCT::Const::SUB_RATE,
+);
 
-  # Insertion and deletion length
-  $self->{max_ins} = defined $args->{max_ins}? $args->{max_ins} : $CracTools::SimCT::Const::MAX_INS;
-  $self->{max_del} = defined $args->{max_del}? $args->{max_del} : $CracTools::SimCT::Const::MAX_DEL;
-}
+# Maximum insertion/deletion length
+has 'max_ins' => (
+  is => 'rw',
+  isa => 'Int',
+  default => $CracTools::SimCT::Const::MAX_INS,
+);
+has 'max_del' => (
+  is => 'rw',
+  isa => 'Int',
+  default => $CracTools::SimCT::Const::MAX_DEL,
+);
 
-sub setMutationRate {
-  my $self = shift;
-  my ($mutation_type,$mutation_rate) = @_;
-  if(defined $mutation_type && defined $mutation_rate) {
-    $self->{mutation_rates}->{$mutation_type} = $mutation_rate;
-  } else {
-    carp "Missing argument to set mutation rate";
-  }
-}
-
-sub getMutationRate {
-  my $self          = shift;
-  my $mutation_type = shift;
-  return $self->{mutation_rates}->{$mutation_type};
-}
-
-sub maxInsertion {
-  my $self = shift;
-  return $self->{max_ins};
-}
-
-sub maxDeletion {
-  my $self = shift;
-  return $self->{max_del};
-}
+with 'CracTools::SimCT::MutationGenerator';
 
 # Generate random mutations in the genomeSimulator object
 sub generateMutations {
   my $self = shift;
-  foreach my $chr ($self->genomeSimulator->references) {
-    my $chr_length  = $self->genomeSimulator->getReferenceLength($chr);
-    my $nb_sub      = int($chr_length * $self->getMutationRate('sub') / 100);
-    my $nb_ins      = int($chr_length * $self->getMutationRate('ins') / 100);
-    my $nb_del      = int($chr_length * $self->getMutationRate('del') / 100);
+  foreach my $chr ($self->genome_simulator->genome->references) {
+    my $chr_length  = $self->genome_simulator->genome->getReferenceLength($chr);
+
+    my $nb_sub      = int($chr_length * $self->sub_rate / 100);
+    my $nb_ins      = int($chr_length * $self->ins_rate / 100);
+    my $nb_del      = int($chr_length * $self->del_rate / 100);
 
     # Generate Substitution
     while($nb_sub > 0) {
-      $nb_sub-- if $self->genomeSimulator->addSubstitution(
-        $chr,
-        int(rand($chr_length)),
-        $CracTools::Const::NUCLEOTIDES->[int(rand(4))],
+      $nb_sub-- if $self->genomeSimulator->addMutation(
+        CracTools::SimCT::Mutation::Substitution->new(
+          chr => $chr,
+          pos => int(rand($chr_length)),
+          new_nuc => $CracTools::Const::NUCLEOTIDES->[int(rand(4))],
+        ),
       );
     }
 
     # Generate Insertions
     while($nb_ins > 0) {
       $nb_ins-- if $self->genomeSimulator->addInsertion(
-        $chr,
-        int(rand($chr_length)),
-        join("", map{$CracTools::Const::NUCLEOTIDES->[int(rand(4))]} (1..int(rand(10-1)+1))), # This generates a random insertion
+        CracTools::SimCT::Mutation::Insertion->new(
+          chr => $chr,
+          pos => int(rand($chr_length)),
+          inserted_sequence => join("", 
+            map{$CracTools::Const::NUCLEOTIDES->[int(rand(4))]} (1..int(rand(10-1)+1))
+          ), # This generates a random insertion
+        ),
       );
     }
 
     # Generate Deletions
     while($nb_del > 0) {
       $nb_del-- if $self->genomeSimulator->addDeletion(
-        $chr,
-        int(rand($chr_length - $self->maxDeletion)),
-        int(rand($self->maxDeletion-1)) + 1,
+        CracTools::SimCT::Mutation::Deletion->new(
+          chr => $chr,
+          pos => int(rand($chr_length - $self->maxDeletion)),
+          length => int(rand($self->maxDeletion-1)) + 1,
+        ),
       );
     }
   }

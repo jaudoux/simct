@@ -1,21 +1,20 @@
-use strict;
-use warnings;
-
 package CracTools::SimCT::MutationGenerator::Fusion;  
 # ABSTRACT: A mutation generator that introduce random fusions
 
-use parent 'CracTools::SimCT::MutationGenerator';
-
-use Carp;
+use Moose;
 
 use CracTools::Const;
 use CracTools::SimCT::Const;
+use CracTools::SimCT::Fusion;
+use CracTools::SimCT::Fusion::FusedExon;
 
-sub _init {
-  my $self = shift;
-  my $args = shift;
-  # TODO Add a "min_fusion_distance" parameter!!!
-}
+has annotations => (
+  is => 'ro',
+  isa => 'CracTools::SimCT::Annotations',
+  required => 1,
+);
+
+with 'CracTools::SimCT::MutationGenerator';
 
 # Generate random mutations in the genomeSimulator object
 sub generateMutations {
@@ -24,24 +23,24 @@ sub generateMutations {
 
   # If there is not 2 genes at least, then we can not create
   # any fusions
-  return 0 if $self->genomeSimulator->genes < 2;
+  return 0 if $self->annotations->genes < 2;
 
   while($nb_fusions > 0) {
     # We pick to random genes out of the gene catalogue
-    my $gene_A = ($self->genomeSimulator->genes)[int rand $self->genomeSimulator->genes];
-    my $gene_B = ($self->genomeSimulator->genes)[int rand $self->genomeSimulator->genes];
+    my $gene_A = $self->annotations->allGenes[int rand $self->annotations->allGenes];
+    my $gene_B = $self->annotations->allGenes[int rand $self->annotations->allGenes];
 
     # If we have pick the same gene two times we try again
-    next if $gene_A eq $gene_B;
+    #next if $gene_A eq $gene_B;
 
     # If the fusion is properly added, we decrement our counter
     $nb_fusions-- if $self->genomeSimulator->addFusion(
-      $gene_A,
-      # We choose one random exon of gene_A
-      ($self->genomeSimulator->exons($gene_A))[int rand $self->genomeSimulator->exons($gene_A)],
-      $gene_B,
-      # We choose one random exon of gene_B
-      ($self->genomeSimulator->exons($gene_B))[int rand $self->genomeSimulator->exons($gene_B)],
+      fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(
+        exon => $gene_A->allExons[int rand $gene_A->allExons],
+      ),
+      fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(
+        exon => $gene_B->allExons[int rand $gene_B->allExons],
+      ),
     );
   }
 

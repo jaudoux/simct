@@ -25,8 +25,7 @@ use File::Temp;
   $fw->generateSimulation(
     genome_dir      => $genome_dir,
     annotation_file => $gtf_file,
-    #output_dir      => $output_dir,
-    output_dir      => "test-flux",
+    output_dir      => $output_dir,
     flux_parameters => {
       POLYA_SHAPE   => 'NaN',
       TSS_MEAN      => 'NaN',
@@ -36,6 +35,7 @@ use File::Temp;
       NB_MOLECULES  => 100,
     },
   );
+  ok(1);
 }
 
 # Exon 1: CCCGTCGCATG

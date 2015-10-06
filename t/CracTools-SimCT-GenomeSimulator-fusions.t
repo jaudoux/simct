@@ -2,6 +2,11 @@ use strict;
 use warnings;
 
 use Test::More tests => 9;
+use CracTools::SimCT::Const;
+use CracTools::SimCT::Genome;
+use CracTools::SimCT::Fusion;
+use CracTools::SimCT::Fusion::FusedExon;
+use CracTools::SimCT::Annotations;
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::Utils;
 use Inline::Files 0.68;
@@ -15,29 +20,46 @@ my $chr2_fasta_file = new File::Temp( SUFFIX => '.fa', UNLINK => 1);
 while(<CHR2_FASTA>) {print $chr2_fasta_file $_;}
 close $chr2_fasta_file;
 
+my $genome = CracTools::SimCT::Genome->new(
+  reference_sequence_files => {
+    1 => $chr1_fasta_file->filename,
+    2 => $chr2_fasta_file->filename,
+  },
+);
+
 # Load the GTF annotations
 my $gtf_file = new File::Temp( SUFFIX => '.gtf', UNLINK => 1);
 while(<ANNOTATIONS>) {print $gtf_file $_;}
 close $gtf_file;
 
+my $annotations = CracTools::SimCT::Annotations->new();
+$annotations->loadGTF($gtf_file->filename);
+
 # Create the GenomeSimulator
 my $gs = CracTools::SimCT::GenomeSimulator->new(
-  reference_sequence_files => { 1 => $chr1_fasta_file->filename, 2 => $chr2_fasta_file->filename},
-  annotation_file => $gtf_file,
+  genome => $genome,
 );
 
-$gs->addFusion('geneA','11,27','geneB','16,22');
+$gs->addFusion(
+  CracTools::SimCT::Fusion->new(
+    fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(
+      exon => $annotations->getGene('geneA')->getExon('11,27'),
+    ),
+    fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(
+      exon => $annotations->getGene('geneB')->getExon('16,22'),
+    ),
+  ),
+);
 
 my $genome_dir = File::Temp->newdir();
 my $gtf_output = new File::Temp( SUFFIX => '.gtf' );
 
-my $frozen_gs = $gs->generateGenome(
-  fasta_dir   => $genome_dir,
-  gtf_file    => $gtf_output,
-  #gtf_file    => "test.gtf",
+my $sg = $gs->generateGenome(
+  genome_dir  => $genome_dir,
+  annotations => $annotations,
 );
 
-my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/chrFusions.fa");
+my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/chr$CracTools::SimCT::Const::CHR_FUSIONS.fa");
 my $entry     = $fasta_it->();
 
 
@@ -45,8 +67,9 @@ my $entry     = $fasta_it->();
 my $fusion_1 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(GCCGATCGAGCTAACTAGCTAG)";
 ok($entry->{seq} =~ /^$fusion_1$/,"generateGenome - FASTA control (2)");
 
-my $gtf_it        = CracTools::Utils::gffFileIterator($gtf_output,'gtf');
+my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');
 
+# Skip regular exons
 $gtf_it->() for 1..5;
 
 # Check the first fusion
