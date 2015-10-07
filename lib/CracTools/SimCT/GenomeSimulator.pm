@@ -191,16 +191,15 @@ sub generateGenome {
     # We print the fasta sequence corresponding to the fusion
     $remainder = CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$fusion->fusion_sequence,$remainder);
 
-    # No we update the annotations and print them to the GTF
-    # Update the position of the fusion in the "$CracTools::SimCT::Const::CHR_FUSIONS" chr
-    # TODO this could be parameters of the 'getFusionGene' method !?
-    $fusion->fusion_id("fusion_$fusion_id");
-    $fusion->chr_fusion($CracTools::SimCT::Const::CHR_FUSIONS);
-    $fusion->chr_fusion_pos($chr_fusion_pos);
-
     # Get the new genes and add it to the annotations
-    my $fusion_gene = $fusion->getFusionGene;
+    my $fusion_gene = $fusion->getFusionGene(
+      $id,
+      $CracTools::SimCT::Const::CHR_FUSIONS,
+      $chr_fusion_pos,
+    );
     $fusion_annotations->addGene($fusion_gene);
+
+    # Update the fusion pos for the next fusion
     $chr_fusion_pos = $fusion_gene->end + 1;
     $fusion_id++;
   }
@@ -222,3 +221,76 @@ sub generateGenome {
 1;
 
 __END__
+
+=head1 DESCRIPTION
+
+L<CracTools::SimCT::GenomeSimulator> is a fundamental class of SimCT wich will
+create a L<CracTools::SimCT::SimulatedGenome> given a reference genome and a set of
+mutations and fusions. Multiple simulated genome can be generated from the same
+GenomeSimulator by introducing new mutations and/or removing some of them.
+
+=head1 ACCESSORS
+
+=head2 genome => CracTools::SimCT::Genome
+
+Getter for the reference genome
+
+=head2 genome_mask => CracTools::GenomeMask
+
+Getter for the genome mask associated to the reference genome
+
+=head2 mutations => ArrayRef[CracTools::SimCT::Mutation]
+
+Getter for the array references that contains the mutations introduced in the
+simulated genome.
+
+=head1 METHODS
+
+=head2 new
+
+  Arg [genome]  : 'CracTools::SimCT::Genome' - the reference genome to be used
+
+Create a new 'CracTools::SimCT::GenomeSimulator' object
+
+=head2 allMutations => Array('CracTools::SimCT::Mutation')
+
+Return all inserted mutations
+
+=head2 sortedMutations  => Array('CracTools::SimCT::Mutation')
+
+Return all inserted mutations sorted by chromosome and position
+
+=head2 addMutation('CracTools::SimCT::Mutation') => 0|1
+
+Add a mutations and return true if the mutation was properly added or false if
+it was in conflict with a previously inserted mutation or outside the scope of
+the reference genome (ie. chromosome sequence not available or position greater
+than the chromosome length).
+
+=head2 allFusions => Array('CracTools::SimCT::Fusion')
+
+Return all inserted fusions
+
+=head2 addFusion('CracTools::SimCT::Fusion')
+
+Add a fusion
+
+=head2 generateGenome => 'CracTools::SimCT::SimulatedGenome'
+
+  Arg [genome_dir]   : 'Path' - the directory where the simulated genome will be
+                        saved.
+  Arg [annotations]  : 'CracTools::SimCT::Annotations' - A set of annotations
+                        over the reference genome that will be liftover the 
+                        simulated genome and print into
+                        "genome_dir/annotations.gtf"
+
+Simulated a genome using the current state (ie. introduced mutations) of the
+GenomeSimulator. Genome chromosome sequences are saved in FASTA format in
+separated files. If an annotations object is provided they are shifted over the
+simulated genome and also saved in the 'GTF' format in the same directory under
+'annotations.gtf' filename.
+
+This method also return a 'CracTools::SimCT::SimulatedGenome' new object wich
+is able shift chromosomic coordinates from the simulated genome to the reference
+genome. 'CracTools::SimCT::SimulatedGenome' also hold a frozen set of mutations
+that where used to generate the simulated genome.
