@@ -17,6 +17,7 @@
 - [ ] Complete code unit-tests
 - [ ] Simplify the fusion creation : only pass the two exons in argument...
 - [ ] Save simulated genome so it can be reconstructed latter
+- [ ] Sort FASTQ sequences by start position of mapping to maximise the compression!!!
 
 The output of simCT should be:
 
