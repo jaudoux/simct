@@ -72,9 +72,12 @@ sub generateSimulation {
     print $parameter_fh "$parameter\t".$flux_parameters->{$parameter}."\n";
   }
   close($parameter_fh);
+
+  # Remove sorted annotation that may exists
+  unlink File::Spec->catfile($output_dir,"annotations_sorted.gtf");
   
   # Then run flux
-  my $command = $self->fluxBinary." -p $parameter_file";
+  my $command = $self->fluxBinary." -p $parameter_file --force -x -l -s";
   system($command);
 
 

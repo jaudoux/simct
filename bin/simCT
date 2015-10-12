@@ -10,13 +10,15 @@ use File::Spec;
 use Cwd 'abs_path';
 use Data::Dumper;
 
+use CracTools::SimCT::Genome;
+use CracTools::SimCT::Annotations;
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::SimCT::MutationGenerator::Random;
 use CracTools::SimCT::MutationGenerator::Fusion;
 use CracTools::SimCT::FluxWrapper;
 
 my ($help,$man,$verbose);
-my ($genome_dir,$annotations,$flux_par,$sub_rate,$ins_rate,$del_rate,$nb_fusions);
+my ($genome_dir,$gtf_file,$flux_par,$sub_rate,$ins_rate,$del_rate,$nb_fusions);
 my $output_dir = "simulation";
 my $nb_process = 1;
 
@@ -26,7 +28,7 @@ GetOptions( "v|verbose"             => \$verbose,
             "p=i"                   => \$nb_process,
             "o|output-dir=s"        => \$output_dir,
             "g|genome-dir=s"        => \$genome_dir,
-            "a|annotations=s"       => \$annotations,
+            "a|annotations=s"       => \$gtf_file,
             "f|flux-parameters=s"   => \$flux_par,
             "s|substitution-rate=f" => \$sub_rate,
             "i|insertion-rate=f"    => \$ins_rate,
@@ -45,23 +47,40 @@ pod2usage(
 pod2usage(
   -message => "Mandatory argument '-annotations' is missing",
   -verbose => 1,
-) unless defined $annotations;
+) unless defined $gtf_file;
 
 # Create an output directory if not defined
 mkdir $output_dir;
 
+# Create the reference genome
+#print STDERR Dumper(\%reference_sequence_files);
+print STDERR "Looking for FASTA references in $genome_dir";
 opendir(GEN,$genome_dir) or die "Can't open $genome_dir: $!";
-my %reference_sequence_files = map { (my $chr = $_) =~ /(?:chr)?(\S+)\.fa$/ => File::Spec->catfile($genome_dir,$_) } grep{ /\.fa$/ } readdir(GEN);
+my %reference_sequence_files = map { (my $chr = $_) =~ /(?:chr)?(\S+)\.fa(?:\.gz)$/ => File::Spec->catfile($genome_dir,$_) } grep{ /\.fa(?:\.gz)$/ } readdir(GEN);
 closedir(GEN);
 
 print STDERR Dumper(\%reference_sequence_files);
+print STDERR "References found : \n".join("\n", map { "\t- ".$_."=>".$reference_sequence_files{$_}} keys %reference_sequence_files),"\n";
 
-print STDERR "Building GenomeSimulator (reading annotations)\n";
-my $genome_simulator = CracTools::SimCT::GenomeSimulator->new(
-  reference_sequence_files  => \%reference_sequence_files,
-  annotation_file           => $annotations,
+print STDERR "Calculating references length\n";
+my $genome = CracTools::SimCT::Genome->new(
+  reference_sequence_files => \%reference_sequence_files,
 );
 
+#print STDERR Dumper(\%reference_sequence_files);
+print STDERR "Loading annotations\n";
+# Create the annotations
+my $annotations = CracTools::SimCT::Annotations->new();
+$annotations->loadGTF($gtf_file,$genome);
+
+
+# Create the GenomeSimulator
+print STDERR "Building GenomeSimulator (reading annotations)\n";
+my $genome_simulator = CracTools::SimCT::GenomeSimulator->new(
+  genome => $genome,
+);
+
+# Generate Mutations (random)
 my $mutation_generator = CracTools::SimCT::MutationGenerator::Random->new(
   genome_simulator  => $genome_simulator,
   ins_rate          => $ins_rate,
@@ -72,25 +91,27 @@ my $mutation_generator = CracTools::SimCT::MutationGenerator::Random->new(
 print STDERR "Generate random mutations (ins,del,sub)\n";
 $mutation_generator->generateMutations();
 
+# Generate Fusions
 if(defined $nb_fusions) {
   my $fusion_generator = CracTools::SimCT::MutationGenerator::Fusion->new(
     genome_simulator  => $genome_simulator,
   );
 
   print STDERR "Generate random fusions\n";
-  $fusion_generator->generateMutations($nb_fusions);
+  $fusion_generator->generateMutations($annotations,$nb_fusions);
 }
 
-# Make a directory for the simulated genome
+# Create the simulated genome
 print STDERR "Generate the simulated genome as FASTA and GTF\n";
 my $simulated_genome_dir  = File::Spec->catfile($output_dir,"simulated_genome");
 my $simulated_annotations = File::Spec->catfile($simulated_genome_dir,"annotations.gtf");
 mkdir $simulated_genome_dir;
-my $frozen_gs = $genome_simulator->generateGenome(
-  fasta_dir => $simulated_genome_dir,
-  gtf_file  => $simulated_annotations,
+my $simulated_genome = $genome_simulator->generateGenome(
+  genome_dir => $simulated_genome_dir,
+  annotations => $annotations,
 );
 
+# Generate RNA-Seq reads for this genome
 my $flux_wrapper    = CracTools::SimCT::FluxWrapper->new();
 my $flux_output_dir = File::Spec->catfile($output_dir,"flux_simulation");
 mkdir $flux_output_dir;
@@ -108,10 +129,10 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
   },
 );
 
-
+# Finally we generate truth databases for this simulation
 my $alignements_bed = File::Spec->catfile($output_dir,"alignments.bed");
 my $mutations_vcf   = File::Spec->catfile($output_dir,"mutations.vcf");
-$frozen_gs->shiftAlignements(
+$simulated_genome->shiftAlignements(
   bed_file    => $flux_outputs->{sequencing_file},
   output_file => $alignements_bed,
   vcf_file    => $mutations_vcf,

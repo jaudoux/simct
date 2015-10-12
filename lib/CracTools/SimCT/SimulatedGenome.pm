@@ -73,7 +73,6 @@ sub BUILD {
   }
 };
 
-
 sub shiftAlignements {
   my $self      = shift;
   my %args      = @_;
@@ -129,7 +128,7 @@ sub shiftAlignements {
         # If the prev block is glued to this one (due to a deletion)
         # we merge them into one block.
         my $prev_block = @{$new_line->{blocks}}? $new_line->{blocks}->[$#{$new_line->{blocks}}]: undef;
-        if(defined $prev_block && $prev_block->{start}+$prev_block->{size} == $block_start) {
+        if(defined $prev_block && $block_start =~ /^[0-9]+$/ && $prev_block->{start}+$prev_block->{size} == $block_start) {
           $prev_block->{size} += $shifted_interval->{end} - $shifted_interval->{start} + 1,
         # Otherwise we add a new block
         } else {
@@ -166,3 +165,16 @@ sub shiftAlignements {
 }
 
 1;
+
+__END__
+
+=head1 DESCRIPTION
+
+
+=head1 ACCESSORS
+
+=head2 liftover
+
+=head2 mutation_query
+
+=head1 METHODS

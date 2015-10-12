@@ -5,7 +5,11 @@ use Moose::Role;
 
 use Carp;
 
-has 'genome_simulator';
+has 'genome_simulator' => (
+  is => 'rw',
+  isa => 'CracTools::SimCT::GenomeSimulator',
+  required => 1,
+);
 
 requires 'generateMutations';
 

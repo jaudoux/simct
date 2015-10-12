@@ -1,4 +1,5 @@
 package CracTools::SimCT::Fusion::FusedExon;
+# ABSTRACT: A fused exon implicated in a 'CracTools::SimCT::Fusion'
 
 use Moose::Role;
 
@@ -49,6 +50,7 @@ package CracTools::SimCT::Fusion::FusedExon::5prim;
 
 use Moose;
 use Scalar::Util 'refaddr';
+
 
 with 'CracTools::SimCT::Fusion::FusedExon';
 
@@ -142,3 +144,81 @@ sub allFusedExons {
 }
 
 1;
+
+__END__
+
+=head1 DESCRIPTION
+
+'CracTools::SimCT::Fusion::FusedExon' holds an exon implicated in a gene fusion.
+
+This base class has two implementations :
+
+=over 2
+
+=item - L<CracTools::SimCT::Fusion::FusedExon::5prim>
+
+Which describes a fused exon that implicates the 5prim extremity of its gene
+
+=item - L<CracTools::SimCT::Fusion::FusedExon::3prim>
+
+Which describes a fused exon that implicates the 3prim extremity of its gene
+
+=back
+
+=head1 ACCESSORS
+
+=head2 exon => 'CracTools::SimCT::Annotations::Exon'
+
+Getter for the fused exon
+
+=head2 fused_sequence => 'DNA'
+
+Getter for the fused sequence
+
+=head2 length
+
+Length of the fused sequence
+
+=head2 gene => 'CracTools::SimCT::Annotations::Gene'
+
+Fast accessor for the exon's gene (eq. $self->exon->gene)
+
+=head2 chr => 'Str'
+
+Fast accessor for the exon's chromosome
+
+=head2 strand => 'Strand'
+
+Fast accessor for the exon's strand
+
+=head1 METHODS
+
+=head2 new
+
+  Arg [exon] : 'CracTools::SimCT::Annotations::Exon' - the fused exon
+
+Create a new 'CracTools::SimCT::Fusion::FusedExon' object
+
+=head2 setFusedSequence($chr_ref)
+
+Given a reference of the chromosome sequence, set the 'fused_sequence'
+attributes.
+
+For the 'CracTools::SimCT::Fusion::FusedExon::5prim' it correspond to the
+5prim start of the gene until the end of the fused exon.
+
+For the 'CracTools::SimCT::Fusion::FusedExon::3prim' it correspond to the
+start of the fused exon until the 3prim end of the gene.
+
+=head2 allFusedExons => Array('CracTools::SimCT::Annotations::Exons')
+
+Return an array of all implicated exons in the fusion for this fused gene.
+
+In the case of the 'CracTools::SimCT::Fusion::FusedExon::5prim' implementation,
+the fused exon, is stored in the last position of the array (ie. accessible with
+a 'pop').
+
+In the case of the 'CracTools::SimCT::Fusion::FusedExon::3prim' implementation,
+the fused exon, is stored in the first position of the array (ie. accessible with
+a 'shift').
+

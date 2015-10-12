@@ -1,8 +1,45 @@
 
 # TODO
-- Add SAM support for alignements or alignment should be encoded in reads names?
-- Add a mutation generator that is based on a VCF file
-- Find a syntax for generating a simulated experiment (in YAML if possible)
-- We should be able to run the pipeline step separatly if we want
-- Output should be compressed to GZIP
-- Break the genomeSimulator in more pieces...
+- [ ] Add SAM support for alignements or alignment should be encoded in reads names?
+      Readname seems to be the best solution, and it can still be transformed to
+      BAM, err-file and such
+- [ ] Add a mutation generator that is based on a VCF file for example the one from dbSNP
+- [ ] Find a syntax for generating a simulated experiment (in YAML if possible)
+- [ ] We should be able to run the pipeline step separatly if we want (like FLUX does)
+- [ ] Output should be compressed to GZIP
+- [x] Break the genomeSimulator in more pieces...
+- [ ] Generates chimera output
+- [ ] Introduce a model to create multi-genome samples with a kind of phylogeny
+- [ ] Use flux to samples these genomes with the same expression profile but
+      with minor changes
+- [ ] Introduce "repeats" features
+- [ ] Complete code documentation
+- [ ] Complete code unit-tests
+- [ ] Simplify the fusion creation : only pass the two exons in argument...
+- [ ] Save simulated genome so it can be reconstructed latter
+
+The output of simCT should be:
+
+- FASTQ(s) sequence file (gzipped)
+[- Sorted-indexed BAM for alignment]
+- VCF file for sequenced mutations
+- chimeras file for chimeric breakpoints
+[- Err file for error positions]
+[- Exon/transcripts/gene counts]
+- directorie(s) with simulated genome(s)
+- directorie(s) with simulation's outputs
+
+# Read name encoding
+
+format for encoded alignements and errors into the read-name
+
+(genome_id)id:(chr,(-)pos,cigar(;)?)+,(err_pos(;)?)+
+
+ex: a0:1,12345,20M2I3X30M;2:-6789:20M:1,2,3,4
+
+# Multi-clonal model
+1. Multi-genomes => Choose a method to create the pylogenye of simulated genomes...
+2. Multi expression profiles => Chose a function to do that...
+
+# Configuration YAML 
+Configuration file should be able

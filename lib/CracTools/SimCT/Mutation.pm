@@ -80,7 +80,7 @@ sub getVCFRecord {
   return \%vcf_record;
 }
 
-with ('CracTools::SimCT::GeneticVariant');
+#with ('CracTools::SimCT::GeneticVariant');
 
 1;
 

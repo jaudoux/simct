@@ -59,7 +59,7 @@ my $sg = $gs->generateGenome(
   annotations => $annotations,
 );
 
-my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/chr$CracTools::SimCT::Const::CHR_FUSIONS.fa");
+my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/$CracTools::SimCT::Const::CHR_FUSIONS.fa");
 my $entry     = $fasta_it->();
 
 

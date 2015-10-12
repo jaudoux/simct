@@ -15,6 +15,7 @@ has exons_hash => (
   handles => {
     allExons  => 'values',
     getExon   => 'get',
+    nbExons   => 'count',
   },
 );
 
@@ -110,6 +111,10 @@ Create a new 'CracTools::SimCT::Annotations::Gene' object
 =head2 addExon('CracTools::SimCT::Annotations::Exon')
 
 Add a new exon for this gene
+
+=head2 nbExons => 'Int'
+
+Return the number of exons
 
 =head2 allExons() => Array['CracTools::SimCT::Annotations::Exon']
 

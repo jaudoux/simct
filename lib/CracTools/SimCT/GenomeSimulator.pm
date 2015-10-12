@@ -129,7 +129,6 @@ sub generateGenome {
 
       # We read the sequence before the mutation and print it in
       # the output fasta
-      #my $frag    = substr $chr_seq, $index, $mut->pos-$index, "";
       my $frag    = substr $chr_seq, 0, $mut->pos-$index, "";
       $remainder  = CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$frag,$remainder);
 
@@ -152,12 +151,11 @@ sub generateGenome {
     }
 
     # Now we print what's left of the reference
-    my $frag    = substr $chr_seq, 0, $chr_length - $index;
+    my $frag = substr $chr_seq, 0, $chr_length - $index;
     CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$frag,$remainder);
 
     # Add the last interval to the liftover
     $annot_lifter->addInterval($chr,$index,$chr_length-1,$offset);
-
 
     close($fasta_output_fh);
   }
@@ -174,11 +172,11 @@ sub generateGenome {
   $annotations->appendGTF($gtf_output_fh,$annot_lifter);
 
   # Now we print an extra FASTA file with fusions
-  my $fasta_output    = File::Spec->catfile($genome_dir,"chr$CracTools::SimCT::Const::CHR_FUSIONS.fa");
+  my $fasta_output    = File::Spec->catfile($genome_dir,"$CracTools::SimCT::Const::CHR_FUSIONS.fa");
   my $fasta_output_fh = CracTools::Utils::getWritingFileHandle($fasta_output);
 
   # Print FASTA headers
-  print $fasta_output_fh ">chr$CracTools::SimCT::Const::CHR_FUSIONS\n";
+  print $fasta_output_fh ">$CracTools::SimCT::Const::CHR_FUSIONS\n";
 
   my $remainder       = 0;
   my $fusion_id       = 0;
@@ -193,7 +191,7 @@ sub generateGenome {
 
     # Get the new genes and add it to the annotations
     my $fusion_gene = $fusion->getFusionGene(
-      $id,
+      "fusion_".$fusion_id,
       $CracTools::SimCT::Const::CHR_FUSIONS,
       $chr_fusion_pos,
     );
@@ -202,6 +200,7 @@ sub generateGenome {
     # Update the fusion pos for the next fusion
     $chr_fusion_pos = $fusion_gene->end + 1;
     $fusion_id++;
+
   }
 
   # Print fusion annotations

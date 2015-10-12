@@ -5,6 +5,7 @@ use Moose;
 use CracTools::Utils;
 
 # Automatically set by reading the reference sequence files
+# TODO this should be a lazy argument that is only computed if asked
 has references_length => (
   traits => ['Hash'],
   is => 'ro',
@@ -50,6 +51,11 @@ sub getReferenceSeq($) {
 
 __END__
 
+=head1 DESCRIPTION
+
+'CracTools::SimCT::Genome' is a set of FASTA sequence files that constitutes
+a genome providing accessors for reference sequences and length.
+
 =head1 METHODS
 
 =head2 new
@@ -59,3 +65,19 @@ __END__
                                     values the reference FASTA files
 
 Create a new 'CracTools::SimCT::Genome' object
+
+=head2 references => Array('Str')
+
+Return all references (chromosomes) names
+
+=head2 getReferenceFile($ref)
+
+Given a reference name, return the corresponding FASTA file
+
+=head2 getReferenceLength($ref)
+
+Given a reference name, return its length (calculated from the FASTA)
+
+=head2 getReferenceSeq($ref)
+
+Given a reference name, return its sequence (retrieved from the FASTA)

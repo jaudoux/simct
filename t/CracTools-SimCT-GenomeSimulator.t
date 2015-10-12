@@ -8,6 +8,7 @@ use CracTools::SimCT::Annotations;
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::SimCT::Fusion;
 use CracTools::SimCT::Fusion::FusedExon;
+use CracTools::SimCT::Mutation;
 use CracTools::SimCT::Mutation::Insertion;
 use CracTools::SimCT::Mutation::Deletion;
 use CracTools::SimCT::Mutation::Substitution;
@@ -107,7 +108,7 @@ use File::Temp;
   my $entry     = $fasta_it->();
   is($entry->{seq},"ATAGGGGTAGTACGCGTCAGTCT","generateGenome - FASTA control (1)");
 
-  $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/chr$CracTools::SimCT::Const::CHR_FUSIONS.fa");
+  $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/$CracTools::SimCT::Const::CHR_FUSIONS.fa");
   $entry     = $fasta_it->();
   # GeneA, exon1: CCCGTC
   # GeneB, exon1-exon2: GCTAGTTAGCTCGATC => GATCGAGCTAACTAGC
@@ -179,6 +180,8 @@ use File::Temp;
     is($fusion_exon_3->{start},81);
     is($fusion_exon_3->{end},86);
   }
+  # TODO check VCF output
+  #
 }
 
 #{

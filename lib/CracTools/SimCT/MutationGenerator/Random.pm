@@ -40,6 +40,17 @@ has 'max_del' => (
 
 with 'CracTools::SimCT::MutationGenerator';
 
+# Remove undefined settings
+around 'BUILDARGS' => sub{
+  my $orig  = shift;
+  my $class = shift;
+  my %args  = @_;
+  for my $key ( keys %args ){
+    delete $args{$key} unless defined $args{$key};
+  }
+  return $class->$orig(%args);
+};
+
 # Generate random mutations in the genomeSimulator object
 sub generateMutations {
   my $self = shift;
@@ -52,7 +63,7 @@ sub generateMutations {
 
     # Generate Substitution
     while($nb_sub > 0) {
-      $nb_sub-- if $self->genomeSimulator->addMutation(
+      $nb_sub-- if $self->genome_simulator->addMutation(
         CracTools::SimCT::Mutation::Substitution->new(
           chr => $chr,
           pos => int(rand($chr_length)),
@@ -63,12 +74,12 @@ sub generateMutations {
 
     # Generate Insertions
     while($nb_ins > 0) {
-      $nb_ins-- if $self->genomeSimulator->addInsertion(
+      $nb_ins-- if $self->genome_simulator->addMutation(
         CracTools::SimCT::Mutation::Insertion->new(
           chr => $chr,
           pos => int(rand($chr_length)),
           inserted_sequence => join("", 
-            map{$CracTools::Const::NUCLEOTIDES->[int(rand(4))]} (1..int(rand(10-1)+1))
+            map{$CracTools::Const::NUCLEOTIDES->[int(rand(4))]} (1..int(rand($self->max_ins-1)+1))
           ), # This generates a random insertion
         ),
       );
@@ -76,11 +87,11 @@ sub generateMutations {
 
     # Generate Deletions
     while($nb_del > 0) {
-      $nb_del-- if $self->genomeSimulator->addDeletion(
+      $nb_del-- if $self->genome_simulator->addMutation(
         CracTools::SimCT::Mutation::Deletion->new(
           chr => $chr,
-          pos => int(rand($chr_length - $self->maxDeletion)),
-          length => int(rand($self->maxDeletion-1)) + 1,
+          pos => int(rand($chr_length - $self->max_del)),
+          length => int(rand($self->max_del-1)) + 1,
         ),
       );
     }

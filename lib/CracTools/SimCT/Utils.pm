@@ -35,7 +35,7 @@ sub printGTFLine($$) {
     defined $gtf->{score}? $gtf->{score} : ".",                # score
     $gtf->{strand},    # strand
     defined $gtf->{frame}? $gtf->{frame} : ".",                # frame
-    join(" ",map { $_ .' "'.$gtf->{attributes}->{$_}.'";' } keys %{$gtf->{attributes}})
+    join(" ",map { $_ .' "'.$gtf->{attributes}->{$_}.'";' } sort keys %{$gtf->{attributes}})
   )."\n";
   #print STDERR "$line";
   print $fh $line;
@@ -51,7 +51,7 @@ sub printVCFLine($$) {
     $vcf->{alt},
     '.',
     'PASS',
-    join(";",map { $_."=".join(',',@{$vcf->{info}->{$_}})  } keys %{$vcf->{info}}),
+    join(";",map { $_."=".join(',',@{$vcf->{info}->{$_}})  } sort keys %{$vcf->{info}}),
   ),"\n";
 }
 

@@ -27,6 +27,7 @@ has genes_hash => (
     allGenes    => 'values',
     allGeneIds  => 'keys',
     getGene     => 'get',
+    nbGenes     => 'count',
     removeGene  => 'delete',
   },
 );
@@ -97,9 +98,14 @@ sub saveGTF {
 
 sub appendGTF {
   my ($self,$fh,$liftover) = @_;
+  my @gtf_buffer = ();
   foreach my $gene ($self->sortedGenes) {
-    my %transcripts_gtf_lines = ();
-    my @sorted_transcript = ();
+    if(@gtf_buffer > 0 && $gtf_buffer[$#gtf_buffer]->{start} < $gene->start) {
+      map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } sort { $a->{start} <=> $b->{start} } @gtf_buffer;
+      @gtf_buffer = ();
+    }
+    #my %transcripts_gtf_lines = ();
+    #my @sorted_transcript = ();
     foreach my $exon ($gene->sortedExons) {
       my ($chr,$start,$end,$strand) = ($exon->chr,$exon->start,$exon->end,$exon->strand);
       # If we have a liftover object, we shift the exon's coordinates
@@ -125,19 +131,21 @@ sub appendGTF {
             'transcript_id' => $transcript_id,
           },
         };
-        if(!defined $transcripts_gtf_lines{$transcript_id}) {
-          push @sorted_transcript, $transcript_id;
-        }
-        push @{$transcripts_gtf_lines{$transcript_id}}, $gtf_line;
+        push @gtf_buffer, $gtf_line;
+        #if(!defined $transcripts_gtf_lines{$transcript_id}) {
+        #  push @sorted_transcript, $transcript_id;
+        #}
+        #push @{$transcripts_gtf_lines{$transcript_id}}, $gtf_line;
       }
     }
     # Print GTF line grouped by 'transrcipt id'
-    foreach my $transcript (@sorted_transcript) {
-      foreach my $gtf_line (@{$transcripts_gtf_lines{$transcript}}) {
-        CracTools::SimCT::Utils::printGTFLine($fh,$gtf_line);
-      }
-    }
+    #foreach my $transcript (@sorted_transcript) {
+    #  foreach my $gtf_line (@{$transcripts_gtf_lines{$transcript}}) {
+    #    CracTools::SimCT::Utils::printGTFLine($fh,$gtf_line);
+    #  }
+    #}
   }
+  map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } @gtf_buffer;
 }
 
 1;
@@ -161,6 +169,10 @@ Given a gene_id return the gene
 =head2 removeGene('gene_id')
 
 Given a gene_id remove this gene from the collection (if it exists)
+
+=head2 nbGenes => 'Int'
+
+Return the number of genes
 
 =head2 allGenes => Array['CracTools::SimCT::Annotations::Gene']
 

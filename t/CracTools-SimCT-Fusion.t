@@ -80,9 +80,7 @@ my $exon_B2 = CracTools::SimCT::Annotations::Exon->new(
     fused_exon_3prim  => $fused_exon_3,
   );
 
-  $fusion->chr_fusion_pos(0);
-
-  my $fusion_gene = $fusion->getFusionGene;
+  my $fusion_gene = $fusion->getFusionGene("MyFusion","Fusion",0);
   is($fusion_gene->start,0);
   is($fusion_gene->end,61);
 
