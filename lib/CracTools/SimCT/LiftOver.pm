@@ -53,18 +53,20 @@ sub shiftInterval {
     if(!$reverse) {
       $shifted_start = max($intervals->[$i]->{start} + $offset, $start + $offset);
       $shifted_end   = min($intervals->[$i]->{end} + $offset, $end + $offset);
-      $ref_start     = max($intervals->[$i]->{start}, $start);
-      $ref_end       = min($intervals->[$i]->{end}, $end);
     } else {
       # We have a reverse offset, then all calculous are done
       # the opposite way
       $shifted_end   = max($offset - $intervals->[$i]->{end}, $offset - $start);
       $shifted_start = min($offset - $intervals->[$i]->{start}, $offset - $end);
-      # TODO verify this ref_start{end} definition
-      $ref_start     = max($intervals->[$i]->{end}, $start);
-      $ref_end       = min($intervals->[$i]->{start}, $end);
       $new_strand    = $new_strand eq '+' ? '-' : '+';
     }
+
+    # Set ref positions
+    $ref_start     = max($intervals->[$i]->{start}, $start);
+    $ref_end       = min($intervals->[$i]->{end}, $end);
+
+    # Skip empty alignements
+    next if $shifted_end <= $shifted_start;
 
     my $new_interval = {
       start   => $shifted_start,
@@ -73,6 +75,7 @@ sub shiftInterval {
       ref_end   => $ref_end,
       chr     => $chr_dest,
       strand  => $new_strand,
+      reverse => $reverse,
     };
 
     $start += $new_interval->{end} - $new_interval->{start} + 1;
@@ -109,6 +112,10 @@ sub shiftAnnotation {
 sub getAlignments {
   my $self = shift;
   my @shifted_intervals = @{$self->shiftInterval(@_)};
+  
+  # If there is no shifted intervals, we return an empty array
+  return () if !@shifted_intervals;
+
   my $current_interval = shift @shifted_intervals;
   my $match_length = $current_interval->{end} - $current_interval->{start} + 1;
   $current_interval->{cigar} .= $match_length . "M";
@@ -131,7 +138,7 @@ sub getAlignments {
         $current_interval->{cigar} .= $ins_length . "I";
       }
       # Update ref start and end 
-      $current_interval->{ref_start}  = $shifted_interval->{ref_start};
+      #$current_interval->{ref_start}  = $shifted_interval->{ref_start};
       $current_interval->{ref_end}    = $shifted_interval->{ref_end};
       $current_interval->{end}        = $shifted_interval->{end};
     # Otherwise it is a chimeric alignment and we have to put some
@@ -144,6 +151,14 @@ sub getAlignments {
     $current_interval->{cigar} .= $match_length . "M";
   }
   return @alignments;
+}
+
+
+sub getSplicedAlignments {
+  my $self = shift;
+  my @intervals = @_;
+  my @spliced_alignments;
+  return @spliced_alignments;
 }
 
 1;

@@ -9,6 +9,7 @@ use Pod::Usage;   # Printing pod documentation in terminal
 use File::Spec;
 use Cwd 'abs_path';
 use Data::Dumper;
+use Tie::RefHash;
 
 use CracTools::SimCT::Genome;
 use CracTools::SimCT::Annotations;
@@ -56,11 +57,11 @@ mkdir $output_dir;
 #print STDERR Dumper(\%reference_sequence_files);
 print STDERR "Looking for FASTA references in $genome_dir";
 opendir(GEN,$genome_dir) or die "Can't open $genome_dir: $!";
-my %reference_sequence_files = map { (my $chr = $_) =~ /(?:chr)?(\S+)\.fa(?:\.gz)$/ => File::Spec->catfile($genome_dir,$_) } grep{ /\.fa(?:\.gz)$/ } readdir(GEN);
+my %reference_sequence_files = map { (my $chr = $_) =~ /(?:chr)?(\S+)\.fa(?:\.gz)?$/ => File::Spec->catfile($genome_dir,$_) } grep{ /\.fa(?:\.gz)?$/ } readdir(GEN);
 closedir(GEN);
 
-print STDERR Dumper(\%reference_sequence_files);
-print STDERR "References found : \n".join("\n", map { "\t- ".$_."=>".$reference_sequence_files{$_}} keys %reference_sequence_files),"\n";
+#print STDERR Dumper(\%reference_sequence_files);
+print STDERR "References found : \n".join("\n", map { "\t- ".$_." => ".$reference_sequence_files{$_}} keys %reference_sequence_files),"\n";
 
 print STDERR "Calculating references length\n";
 my $genome = CracTools::SimCT::Genome->new(
@@ -130,10 +131,272 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
 );
 
 # Finally we generate truth databases for this simulation
-my $alignements_bed = File::Spec->catfile($output_dir,"alignments.bed");
-my $mutations_vcf   = File::Spec->catfile($output_dir,"mutations.vcf");
-$simulated_genome->shiftAlignements(
-  bed_file    => $flux_outputs->{sequencing_file},
-  output_file => $alignements_bed,
-  vcf_file    => $mutations_vcf,
+my $rnaseq_ouput_dir  = File::Spec->catfile($output_dir,"rna_seq");
+mkdir $rnaseq_ouput_dir;
+
+my %splices;
+my %chimeras;
+tie my %mutations, 'Tie::RefHash';
+
+
+my $is_paired_end = $flux_outputs->{flux_parameters}->{PAIRED_END} eq 'YES'? 1 : 0;
+
+# First we generates FASTQ sequences with read alignement
+# and errors position encoded in the read_name
+my $bed_it   = CracTools::Utils::bedFileIterator($flux_outputs->{sequencing_file}); 
+my $fastq_it = CracTools::Utils::seqFileIterator($flux_outputs->{fastq_file},'fastq');
+
+# Output is paired_end, we split files
+my $fastq1_output = $is_paired_end? 
+  File::Spec->catfile($rnaseq_ouput_dir,"reads_1.fastq.gz") : 
+  File::Spec->catfile($rnaseq_ouput_dir,"reads.fastq.gz");
+my $fastq2_output = $is_paired_end?
+  File::Spec->catfile($rnaseq_ouput_dir,"reads_2.fastq.gz") : undef;
+my $fastq1_output_fh = CracTools::Utils::getWritingFileHandle($fastq1_output);
+my $fastq2_output_fh = $is_paired_end?
+  CracTools::Utils::getWritingFileHandle($fastq2_output) : undef;
+
+my $i = 0;
+my $nb_errors = 0;
+while (my $bed_line = $bed_it->()) {
+  my $read = $fastq_it->();
+  my $alignments = getReadAlignments(
+    $bed_line,
+    $simulated_genome,
+    $i,
+    \%splices,
+    \%chimeras,
+    \%mutations,
+  );
+  my $errors_pos = CracTools::SimCT::FluxWrapper::getErrorsPos($read->{seq});
+  $nb_errors += scalar @{$errors_pos};
+  my $fh = ($i % 2 == 0) || !$is_paired_end? $fastq1_output_fh : $fastq2_output_fh;
+  CracTools::Utils::writeSeq($fh,'fastq',
+    getReadName($i,$alignments,$errors_pos),
+    $read->{seq},
+    $read->{qual}
+  );
+  $i++;
+}
+my $nb_reads = $i;
+
+# Print gene_counts and transcript_counts files
+my $transcript_counts_output = File::Spec->catfile($rnaseq_ouput_dir,"transcript-counts.tsv.gz"); 
+my $transcript_counts_fh     = CracTools::Utils::getWritingFileHandle($transcript_counts_output); 
+my $gene_counts_output       = File::Spec->catfile($rnaseq_ouput_dir,"gene-counts.tsv.gz"); 
+my $gene_counts_fh           = CracTools::Utils::getWritingFileHandle($gene_counts_output); 
+my $flux_profile_fh          = CracTools::Utils::getReadingFileHandle($flux_outputs->{profile_file});
+# 1. Create a transcript_id => gene conversion hash
+my %conversion_hash;
+foreach my $gene ($annotations->allGenes) {
+  foreach my $exon ($gene->allExons) {
+    map { $conversion_hash{$_} = $gene } $exon->allTranscripts;
+  }
+}
+# 2. Merge transrcipt counts into gene counts and print transcript counts
+print $transcript_counts_fh join("\t","feature","truth"),"\n";
+tie my %gene_counts, 'Tie::RefHash';
+while(<$flux_profile_fh>) {
+  my @fields = split("\t",$_);
+  # TODO HANDLE FUSION TRANSCRIPTS!!!!
+  next if !defined $conversion_hash{$fields[1]};
+  $gene_counts{$conversion_hash{$fields[1]}} += $fields[9];
+  print $transcript_counts_fh join("\t",$fields[1],$fields[9]),"\n";
+}
+# 3. Print gene counts to the corresponding output file
+print $gene_counts_fh join("\t","feature","truth"),"\n";
+foreach my $gene (keys %gene_counts) {
+  print $gene_counts_fh join("\t",$gene->id,$gene_counts{$gene}),"\n";
+}
+
+# TODO use CracTools::Output to generate the output files
+
+# Print Splices
+if(keys %splices) {
+  my $splices_output = File::Spec->catfile($rnaseq_ouput_dir,"splices.bed.gz"); 
+  my $splices_fh     = CracTools::Utils::getWritingFileHandle($splices_output);
+# TODO Sort splices by start position
+  foreach my $splice (keys %splices) {
+    my ($chr,$start,$end,$strand) = split("@",$splice);
+    CracTools::SimCT::Utils::printBEDLine($splices_fh,
+      { chr     => $chr,
+        start   => $start,
+        end     => $end, # TODO shoud we add +1 because of half-open bed?
+        strand  => $strand,
+        name    => join(':',@{$splices{$splice}}),
+        score   => scalar @{$splices{$splice}},
+      },
+    );
+  }
+}
+
+# Print Chimeras
+if(keys %chimeras) {
+  my $chimeras_output = File::Spec->catfile($rnaseq_ouput_dir,"chimeras.tsv.gz"); 
+  my $chimeras_fh     = CracTools::Utils::getWritingFileHandle($chimeras_output);
+# TODO Sort chimeras by start position
+  foreach my $chimera (keys %chimeras) {
+    my ($chr1,$pos1,$strand1,$chr2,$pos2,$strand2) = split("@",$chimera);
+    print $chimeras_fh join("\t",
+      $chr1,$pos1,$strand1,$chr2,$pos2,$strand2,
+      join(':',@{$chimeras{$chimera}}),
+      scalar @{$chimeras{$chimera}},
+    ),"\n";
+  }
+}
+
+# TODO Print Mutations
+if(keys %mutations) {
+  my $mutations_output = File::Spec->catfile($rnaseq_ouput_dir,"mutations.vcf.gz"); 
+  my $mutations_fh     = CracTools::Utils::getWritingFileHandle($mutations_output);
+  foreach my $mut (sort { $a->pos <=> $b->pos } keys %mutations) {
+    # Get raw VCF record
+    my $vcf_line = $mut->getVCFRecord;
+    # Update information with read names and depth
+    $vcf_line->{id} = join(',',@{$mutations{$mut}});
+    $vcf_line->{info}->{DP} = [scalar @{$mutations{$mut}}];
+    CracTools::SimCT::Utils::printVCFLine($mutations_fh,$vcf_line);
+  }
+}
+
+# TODO generate some info.txt file that contains the number of reads, errors, mutations
+# chimeras, splices, and such
+my $info_output = File::Spec->catfile($rnaseq_ouput_dir,"info.txt"); 
+my $info_fh     = CracTools::Utils::getWritingFileHandle($info_output); 
+my %info = (
+  nb_reads      => $nb_reads,
+  nb_errors     => $nb_errors,
+  nb_splices    => scalar keys %splices,
+  nb_chimeras   => scalar keys %chimeras,
+  nb_mutations  => scalar keys %mutations,
 );
+map { print $info_fh join("\t", $_, $info{$_}),"\n" } keys %info;
+
+# Get read alignments and updates splices, mutations and chimeras
+# TODO move a large part of this method to the getSplicedAlignment methods of the liftOver
+# class
+sub getReadAlignments {
+  my ($bed_line, $simulated_genome, $read_id, $splices, $chimeras, $mutations) = @_;
+  my @alignments = ();
+  # Loop over splices
+  foreach my $block (@{$bed_line->{blocks}}) {
+    # First we get shifted intervals
+    my @block_alignments = $simulated_genome->liftover->getAlignments(
+      $bed_line->{chr},
+      $block->{ref_start},
+      $block->{ref_end} - 1, # because BED intervals are half-open
+      $bed_line->{strand},
+    );
+    #my $curr_alignment = $block_alignments[0];
+    my $prev_alignment = $alignments[$#alignments];
+    foreach my $curr_alignment (@block_alignments) {
+      # If it is not the first alignment we look for a splice
+      # or a chimeric alignement
+      if(defined $prev_alignment) {
+        # Check if we have a splice alignment
+        if($prev_alignment->{chr} eq $curr_alignment->{chr} &&
+          $prev_alignment->{strand} eq $curr_alignment->{strand} &&
+          $prev_alignment->{reverse} == $curr_alignment->{reverse} &&
+          ((!$curr_alignment->{reverse} && 
+            $prev_alignment->{end} < $curr_alignment->{start}) ||
+          ($curr_alignment->{reverse} &&
+            $prev_alignment->{start} > $curr_alignment->{end}))) {
+          my($splice_length,$splice_key);
+          # Regular alignment
+          if(!$curr_alignment->{reverse}) {
+            # We can merge the two alignments
+            $splice_length  = $curr_alignment->{start} - $prev_alignment->{end} - 1;
+            $prev_alignment->{cigar} .= $splice_length . "N" . $curr_alignment->{cigar};
+            $prev_alignment->{end} = $curr_alignment->{end};
+            # Add the read to the splice entry
+            $splice_key = join("@",
+              @{$prev_alignment}{'chr','end'},
+              @{$curr_alignment}{'start','strand'},
+            );
+          # Reversed alignment
+          } else {
+            # We can merge the two alignments
+            $splice_length  = $prev_alignment->{start} - $curr_alignment->{end} - 1;
+            $prev_alignment->{cigar} = $curr_alignment->{cigar} . $splice_length . "N" . $prev_alignment->{cigar};
+            $prev_alignment->{start} = $curr_alignment->{start};
+            # remove this alignment from the list
+            shift @block_alignments;
+            # Add the read to the splice entry
+            $splice_key = join("@",
+              @{$curr_alignment}{'chr','end'},
+              @{$prev_alignment}{'start','strand'},
+            );
+          }
+          # Update ref_end pos
+          $prev_alignment->{ref_end} = $curr_alignment->{ref_end};
+          # remove this alignment from the list
+          shift @block_alignments;
+          # Add the splice
+          push @{$splices->{$splice_key}},$read_id;
+          # Skip this alignement and go to the next one
+          next;
+        # Otherwise it is a chimeric alignment
+        } else {
+          #print STDERR "PREV_ALIGNMENT:\n".Dumper($prev_alignment);
+          #print STDERR "CURR_ALIGNMENT:\n".Dumper($curr_alignment);
+          #sleep 1;
+          # Add the read to the chimera entry
+          my $chim_key = join("@",
+            @{$prev_alignment}{'chr','end','strand'},
+            @{$curr_alignment}{'chr','start','strand'},
+          );
+          # TODO should we try to reverse the chimera?
+          push @{$chimeras->{$chim_key}},$read_id;
+        }
+      # Prepend softclip if the first alignment does not correspond
+      # to the bed line start
+      } elsif($curr_alignment->{ref_start} > $bed_line->{start}) {
+        my $softclip_length = $curr_alignment->{ref_start} - $bed_line->{start};
+        $curr_alignment->{cigar} = $softclip_length."S".$curr_alignment->{cigar};
+      }
+      $prev_alignment = $curr_alignment;
+      push @alignments, $curr_alignment;
+    }
+
+    # Then we get overlapping mutations
+    my @overlapped_mutations = @{$simulated_genome->mutation_query->fetchByRegion(
+      $bed_line->{chr},
+      $block->{ref_start},
+      $block->{ref_end},
+    )};
+    map { push @{$mutations{$_}}, $read_id } @overlapped_mutations;
+  }
+  # Append softclip if the last alignment does not correspond to
+  # the bed line end
+  my $prev_alignment = $alignments[$#alignments];
+  # -1 because bed intervals are half-open
+  if(defined $prev_alignment && $prev_alignment->{ref_end} < $bed_line->{end} - 1) {
+    my $softclip_length = $bed_line->{end} - $prev_alignment->{ref_end} - 1;
+    $prev_alignment->{cigar} .= $softclip_length."S";
+  }
+  return \@alignments;
+}
+
+# Give 
+sub getReadName {
+  my ($read_id,$alignments,$errors_pos) = @_;
+  my $read_name = join(":",
+    $read_id,
+    join(";",
+      map { 
+        join(",",
+          $_->{chr},
+          $_->{start},
+          $_->{strand},
+          $_->{cigar},
+        )
+      } @{$alignments},
+    ),
+  );
+  # TODO find a better way to encode the error position with a compacting
+  # strategy
+  if(@{$errors_pos}) {
+    $read_name = join(":",$read_name,join(",",@{$errors_pos}));
+  }
+  return $read_name;
+}

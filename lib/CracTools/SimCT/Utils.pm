@@ -57,19 +57,26 @@ sub printVCFLine($$) {
 
 sub printBEDLine($$) {
   my ($fh,$bed) = @_;
-  print $fh join("\t",
+  my $bed_line = join("\t",
     $bed->{chr},
     $bed->{start},
     $bed->{end},
     $bed->{name},
-    0,
-    $bed->{strand},
-    '.',
-    '.',
-    '0,0,0',
-    join(",",map { $_->{size} } @{$bed->{blocks}}),
-    join(",",map { $_->{start} } @{$bed->{blocks}}),
-  ),"\n";
+    defined $bed->{score}? $bed->{score} : 0,
+    $bed->{strand}
+  );
+  # If bed line is in 12-field format we append blocks informations
+  if(defined $bed->{blocks}) {
+    $bed_line = join("\t",
+      $bed_line,
+      '.',
+      '.',
+      '0,0,0',
+      join(",",map { $_->{size} } @{$bed->{blocks}}),
+      join(",",map { $_->{start} } @{$bed->{blocks}}),
+    );
+  }
+  print $fh $bed_line, "\n";
 }
 
 # Write the mutated fasta files

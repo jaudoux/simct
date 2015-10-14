@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 15;
+use Test::More tests => 18;
 use CracTools::SimCT::LiftOver;
 
 my $liftover = CracTools::SimCT::LiftOver->new();
@@ -13,6 +13,7 @@ my $liftover = CracTools::SimCT::LiftOver->new();
 $liftover->addInterval("chr1",0,9,0);
 $liftover->addInterval("chr1",15,18,-5); # 5bp insertion
 $liftover->addInterval("chr1",19,25,+5); # 10bp deletion
+$liftover->addInterval("chr1",26,40,0,"chr2"); # 10bp deletion
 
 # Overlap of the insertion
 {
@@ -47,4 +48,7 @@ $liftover->addInterval("chr1",19,25,+5); # 10bp deletion
   is($alignment->{chr},"chr1");
   is($alignment->{start},2);
   is($alignment->{cigar},"8M5I4M10D7M");
+  is($chimeric_alignment->{chr},"chr2");
+  is($chimeric_alignment->{start},26);
+  is($chimeric_alignment->{cigar},"5M");
 }

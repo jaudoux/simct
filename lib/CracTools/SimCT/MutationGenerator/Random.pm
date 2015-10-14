@@ -9,6 +9,9 @@ use CracTools::SimCT::Mutation::Insertion;
 use CracTools::SimCT::Mutation::Deletion;
 use CracTools::SimCT::Mutation::Substitution;
 
+# TODO create a parent class for all mutations generators
+# that uses rates...
+
 # Mutation rates
 has 'ins_rate' => (
   is => 'rw',

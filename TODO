@@ -18,6 +18,9 @@
 - [ ] Simplify the fusion creation : only pass the two exons in argument...
 - [ ] Save simulated genome so it can be reconstructed latter
 - [ ] Sort FASTQ sequences by start position of mapping to maximise the compression!!!
+- [ ] Find a nicer way to encode error positiions in read names with a more compact
+      style
+- [ ] Place code from simCT into a new module (for flux-output post-process mainly)
 
 The output of simCT should be:
 
