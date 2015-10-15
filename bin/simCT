@@ -214,6 +214,7 @@ foreach my $gene (keys %gene_counts) {
 # TODO use CracTools::Output to generate the output files
 
 # Print Splices
+# TODO sort splices by pos
 if(keys %splices) {
   my $splices_output = File::Spec->catfile($rnaseq_ouput_dir,"splices.bed.gz"); 
   my $splices_fh     = CracTools::Utils::getWritingFileHandle($splices_output);
@@ -233,6 +234,7 @@ if(keys %splices) {
 }
 
 # Print Chimeras
+# TODO sort chimeras by pos
 if(keys %chimeras) {
   my $chimeras_output = File::Spec->catfile($rnaseq_ouput_dir,"chimeras.tsv.gz"); 
   my $chimeras_fh     = CracTools::Utils::getWritingFileHandle($chimeras_output);
@@ -273,120 +275,77 @@ my %info = (
 map { print $info_fh join("\t", $_, $info{$_}),"\n" } keys %info;
 
 # Get read alignments and updates splices, mutations and chimeras
-# TODO move a large part of this method to the getSplicedAlignment methods of the liftOver
 sub getReadAlignments {
   my ($bed_line, $simulated_genome, $read_id, $splices, $chimeras, $mutations, $reversed) = @_;
-  my @alignments = ();
-  # Loop over splices
+  my @intervals = ();
+  # Create an array of intervals and retrieve mutations
   foreach my $block (@{$bed_line->{blocks}}) {
-    # First we get shifted intervals
-    my @block_alignments = $simulated_genome->liftover->getAlignments(
+    push @intervals, [
       $bed_line->{chr},
       $block->{ref_start},
       $block->{ref_end} - 1, # because BED intervals are half-open
       $bed_line->{strand},
-    );
-    #my $curr_alignment = $block_alignments[0];
-    my $prev_alignment = $alignments[$#alignments];
-    foreach my $curr_alignment (@block_alignments) {
-      # If it is not the first alignment we look for a splice
-      # or a chimeric alignement
-      if(defined $prev_alignment) {
-        # Check if we have a splice alignment
-        if($prev_alignment->{chr} eq $curr_alignment->{chr} &&
-          $prev_alignment->{strand} eq $curr_alignment->{strand} &&
-          $prev_alignment->{reverse} == $curr_alignment->{reverse} &&
-          ((!$curr_alignment->{reverse} && 
-            $prev_alignment->{end} < $curr_alignment->{start} &&
-            ($curr_alignment->{start} - $prev_alignment->{end}) < $max_splice_length) ||
-          ($curr_alignment->{reverse} &&
-            $prev_alignment->{start} > $curr_alignment->{end} &&
-            ($prev_alignment->{start} - $curr_alignment->{end}) < $max_splice_length))) {
-          my($splice_length,$splice_key);
-          # Regular spliced alignment
-          if(!$curr_alignment->{reverse}) {
-            # We can merge the two alignments
-            $splice_length  = $curr_alignment->{start} - $prev_alignment->{end} - 1;
-            $prev_alignment->{cigar} .= $splice_length . "N" . $curr_alignment->{cigar};
-            $prev_alignment->{end} = $curr_alignment->{end};
-            # Add the read to the splice entry
-            $splice_key = join("@",
-              @{$prev_alignment}{'chr','end'},
-              $curr_alignment->{start},
-              $reversed? 
-                CracTools::SimCT::Utils::reverseStrand($curr_alignment->{strand}) : 
-                $curr_alignment->{strand},
-            );
-          # Reverse spliced alignment
-          } else {
-            # We can merge the two alignments
-            $splice_length  = $prev_alignment->{start} - $curr_alignment->{end} - 1;
-            $prev_alignment->{cigar} = $curr_alignment->{cigar} . $splice_length . "N" . $prev_alignment->{cigar};
-            $prev_alignment->{start} = $curr_alignment->{start};
-            # Add the read to the splice entry
-            $splice_key = join("@",
-              @{$curr_alignment}{'chr','end'},
-              $prev_alignment->{start},
-              $reversed? 
-                CracTools::SimCT::Utils::reverseStrand($prev_alignment->{strand}) : 
-                $prev_alignment->{strand},
-            );
-          }
-          # Update ref_end pos
-          $prev_alignment->{ref_end} = $curr_alignment->{ref_end};
-          # remove this alignment from the list
-          shift @block_alignments;
-          # Add the splice
-          push @{$splices->{$splice_key}},$read_id;
-          # Skip this alignement and go to the next one
-          next;
-        # Otherwise it is a chimeric alignment
-        } else {
-          # Add the read to the chimera entry
-          my ($chr1,$pos1,$strand1,$chr2,$pos2,$strand2);
-
-          my $chim_key = join("@",
-            $prev_alignment->{chr},
-            $prev_alignment->{reverse}? 
-              $prev_alignment->{start} : $prev_alignment->{end},
-            $reversed? 
-              CracTools::SimCT::Utils::reverseStrand($prev_alignment->{strand}) : 
-              $prev_alignment->{strand},
-            $curr_alignment->{chr},
-            $curr_alignment->{reverse}? 
-              $curr_alignment->{end} : $curr_alignment->{start},
-            $reversed? 
-              CracTools::SimCT::Utils::reverseStrand($curr_alignment->{strand}) : 
-              $curr_alignment->{strand},
-          );
-          # TODO should we try to reverse the chimera?
-          push @{$chimeras->{$chim_key}},$read_id;
-        }
-      # Prepend softclip if the first alignment does not correspond
-      # to the bed line start
-      } elsif($curr_alignment->{ref_start} > $bed_line->{start}) {
-        my $softclip_length = $curr_alignment->{ref_start} - $bed_line->{start};
-        $curr_alignment->{cigar} = $softclip_length."S".$curr_alignment->{cigar};
-      }
-      $prev_alignment = $curr_alignment;
-      push @alignments, $curr_alignment;
-    }
-
+    ];
     # Then we get overlapping mutations
     my @overlapped_mutations = @{$simulated_genome->mutation_query->fetchByRegion(
       $bed_line->{chr},
       $block->{ref_start},
-      $block->{ref_end},
+      $block->{ref_end} - 1,
     )};
     map { push @{$mutations{$_}}, $read_id } @overlapped_mutations;
-  }
-  # Append softclip if the last alignment does not correspond to
-  # the bed line end
-  my $prev_alignment = $alignments[$#alignments];
-  # -1 because bed intervals are half-open
-  if(defined $prev_alignment && $prev_alignment->{ref_end} < $bed_line->{end} - 1) {
-    my $softclip_length = $bed_line->{end} - $prev_alignment->{ref_end} - 1;
-    $prev_alignment->{cigar} .= $softclip_length."S";
+  };
+  # Generate the corresponding alignments
+  my @alignments = $simulated_genome->liftover->getSplicedAlignments(@intervals);
+  # Browse the alignments for splices and chimeras
+  my $prev_alignment;
+  foreach my $alignment (@alignments) {
+    my $real_strand = $reversed? 
+      CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) : 
+      $alignment->{strand},
+    my @cigar;
+    while($alignment->{cigar} =~ /(\d+)(\S)/g) {
+      push @cigar, { op => $2, nb => $1 };
+    }
+    my $start = $alignment->{start};
+    foreach my $cigel (@cigar) {
+      if($cigel->{op} eq 'N') {
+        # Add splice
+        if($cigel->{nb} <= $max_splice_length) {
+          my $splice_key = join("@", $alignment->{chr}, $start,
+            $start + $cigel->{nb}, $real_strand);
+          push @{$splices->{$splice_key}},$read_id;
+        # Splice is larger than MAX_SPLICE_LENGTH, then it is a class2 chimera
+        } else {
+          my $chim_key = join('@', $alignment->{chr}, $start, $real_strand,
+            $alignment->{chr}, $start + $cigel->{nb}, $real_strand);
+          push @{$chimeras->{$chim_key}},$read_id;
+        }
+        $start += $cigel->{nb};
+      # If this cigar op is reference based, we update
+      # the start position
+      } elsif($cigel->{op} =~ /^[MD]$/) {
+        $start += $cigel->{nb};
+      }
+    }
+    # If there is a previous alignment we add the corresponding chimera
+    if(defined $prev_alignment) {
+      my $chim_key = join("@",
+        $prev_alignment->{chr},
+        $prev_alignment->{reverse}? 
+          $prev_alignment->{start} : $prev_alignment->{end},
+        $reversed? 
+          CracTools::SimCT::Utils::reverseStrand($prev_alignment->{strand}) : 
+          $prev_alignment->{strand},
+        $alignment->{chr},
+        $alignment->{reverse}? 
+          $alignment->{end} : $alignment->{start},
+        $reversed? 
+          CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) : 
+          $alignment->{strand},
+      );
+      push @{$chimeras->{$chim_key}},$read_id;
+    }
+    $prev_alignment = $alignment;
   }
   return \@alignments;
 }

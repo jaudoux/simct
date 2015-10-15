@@ -15,5 +15,6 @@ our $DEBUG                = 0;
 our $FLUX_BINARY          = 'flux-simulator';
 our $FLUX_OUTPUT_BASENAME = "fluxSimulator";
 our $CHR_FUSIONS          = "Fusions";
+our $MAX_SPLICE_LENGTH    = 300000;
 
 1;
