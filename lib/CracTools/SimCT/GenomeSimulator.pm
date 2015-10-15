@@ -198,7 +198,7 @@ sub generateGenome {
     $fusion_annotations->addGene($fusion_gene);
 
     # Update the fusion pos for the next fusion
-    $chr_fusion_pos = $fusion_gene->end + 1;
+    $chr_fusion_pos += length $fusion->fusion_sequence;
     $fusion_id++;
 
   }

@@ -35,6 +35,8 @@ sub BUILD {
 
     foreach my $mut ($genome_simulator->sortedMutations($chr)) {
       
+      #next if ($mut->referenceLength - $mut->mutationLength) == 0;
+
       $prev_pos = $index;
       $index    = $mut->pos - $offset;
 
@@ -61,9 +63,7 @@ sub BUILD {
         $fusion->chr_fusion,
         $start_pos,
         $start_pos + $fused_exon->length - 1,
-        $fused_exon->strand eq '+'?
-          $fused_exon->gene->start  - $start_pos :
-          $fused_exon->gene->end    + $start_pos,
+        $fused_exon->getFusionOffset($start_pos),
         $fused_exon->chr,
         $fused_exon->strand eq '+'? 0 : 1,
       );

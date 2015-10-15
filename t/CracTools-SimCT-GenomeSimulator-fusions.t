@@ -9,6 +9,7 @@ use CracTools::SimCT::Fusion::FusedExon;
 use CracTools::SimCT::Annotations;
 use CracTools::SimCT::GenomeSimulator;
 use CracTools::Utils;
+use Data::Dumper;
 use Inline::Files 0.68;
 use File::Temp;
 
@@ -51,6 +52,28 @@ $gs->addFusion(
   ),
 );
 
+$gs->addFusion(
+  CracTools::SimCT::Fusion->new(
+    fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(
+      exon => $annotations->getGene('geneB')->getExon('16,22'),
+    ),
+    fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(
+      exon => $annotations->getGene('geneA')->getExon('11,27'),
+    ),
+  ),
+);
+
+$gs->addFusion(
+  CracTools::SimCT::Fusion->new(
+    fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(
+      exon => $annotations->getGene('geneA')->getExon('11,27'),
+    ),
+    fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(
+      exon => $annotations->getGene('geneA')->getExon('8,9'),
+    ),
+  ),
+);
+
 my $genome_dir = File::Temp->newdir();
 my $gtf_output = new File::Temp( SUFFIX => '.gtf' );
 
@@ -64,8 +87,14 @@ my $entry     = $fasta_it->();
 
 
 # CTAGCTAGTTAGCTCGATCGGC => GCCGATCGAGCTAACTAGCTAG
+# lenght: 49
 my $fusion_1 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(GCCGATCGAGCTAACTAGCTAG)";
-ok($entry->{seq} =~ /^$fusion_1$/,"generateGenome - FASTA control (2)");
+# GATCGGC => GCCGATC
+# length: 24
+my $fusion_2 = "(GCCGATC)(CGTCGCATGTCGAAAGT)";
+# length: 47
+my $fusion_3 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(ACCCGTCGCATGTCGAAAGT)";
+ok($entry->{seq} =~ /^($fusion_1)($fusion_2)($fusion_3)$/,"generateGenome - FASTA control (2)");
 
 my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');
 
@@ -87,6 +116,22 @@ $gtf_it->() for 1..5;
   is($fusion_exon_3->{end},34);
   is($fusion_exon_4->{start},39);
   is($fusion_exon_4->{end},49);
+
+  my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,11,30);
+  print STDERR Dumper(\@alignments);
+}
+
+# Check the second fusion
+{
+  my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,50,70);
+  print STDERR Dumper(\@alignments);
+}
+
+
+# Check the third fusion
+{
+  my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,75,115);
+  print STDERR Dumper(\@alignments);
 }
 
 __CHR1_FASTA__

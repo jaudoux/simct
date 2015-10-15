@@ -5,6 +5,7 @@ use Moose;
 
 use List::Util qw(min max);
 use CracTools::Interval::Query;
+#use Data::Dumper;
 
 has 'interval_query' => (
   is  => 'ro',
@@ -49,24 +50,21 @@ sub shiftInterval {
     my $reverse     = $offsets->[$i]->{reverse};
     my $new_strand  = $strand;
 
-    # If we have an offset, we simply shift coordinates
-    if(!$reverse) {
-      $shifted_start = max($intervals->[$i]->{start} + $offset, $start + $offset);
-      $shifted_end   = min($intervals->[$i]->{end} + $offset, $end + $offset);
-    } else {
-      # We have a reverse offset, then all calculous are done
-      # the opposite way
-      $shifted_end   = max($offset - $intervals->[$i]->{end}, $offset - $start);
-      $shifted_start = min($offset - $intervals->[$i]->{start}, $offset - $end);
-      $new_strand    = $new_strand eq '+' ? '-' : '+';
-    }
-
     # Set ref positions
     $ref_start     = max($intervals->[$i]->{start}, $start);
     $ref_end       = min($intervals->[$i]->{end}, $end);
 
-    # Skip empty alignements
-    next if $shifted_end <= $shifted_start;
+    # If we have an offset, we simply shift coordinates
+    if(!$reverse) {
+      $shifted_start = $ref_start + $offset;
+      $shifted_end   = $ref_end + $offset;
+    } else {
+      # We have a reverse offset, then all calculous are done
+      # the opposite way
+      $shifted_end   = $offset - $ref_start;
+      $shifted_start = $offset - $ref_end;
+      $new_strand    = $new_strand eq '+' ? '-' : '+';
+    }
 
     my $new_interval = {
       start   => $shifted_start,
@@ -78,7 +76,6 @@ sub shiftInterval {
       reverse => $reverse,
     };
 
-    $start += $new_interval->{end} - $new_interval->{start} + 1;
     push @shifted_intervals, $new_interval;
   }
 
@@ -124,6 +121,7 @@ sub getAlignments {
   foreach my $shifted_interval (@shifted_intervals) {
     # If this block is collinear with the bed_line genomic coordinate
     # we only update the block_start according to the line start
+    # TODO check the fucking reverse field!!!!!!
     if($current_interval->{chr} eq $shifted_interval->{chr} &&
       $current_interval->{strand} eq $shifted_interval->{strand} &&
       $current_interval->{end} < $shifted_interval->{start}) {
@@ -154,12 +152,72 @@ sub getAlignments {
 }
 
 
-sub getSplicedAlignments {
-  my $self = shift;
-  my @intervals = @_;
-  my @spliced_alignments;
-  return @spliced_alignments;
-}
+#sub getSplicedAlignments {
+#  my $self = shift;
+#  my @intervals = @_;
+#  my @alignments;
+#  # Loop over splices
+#  foreach my $interval (@intervals) {
+#    # First we get shifted intervals
+#    my @block_alignments = $simulated_genome->liftover->getAlignments(@{$interval});
+#
+#    my $prev_alignment = $alignments[$#alignments];
+#    foreach my $curr_alignment (@block_alignments) {
+#      # If it is not the first alignment we look for a splice
+#      # or a chimeric alignement
+#      if(defined $prev_alignment) {
+#        # Check if we have a splice alignment
+#        if($prev_alignment->{chr} eq $curr_alignment->{chr} &&
+#          $prev_alignment->{strand} eq $curr_alignment->{strand} &&
+#          $prev_alignment->{reverse} == $curr_alignment->{reverse} &&
+#          ((!$curr_alignment->{reverse} && 
+#            $prev_alignment->{end} < $curr_alignment->{start} &&
+#            ($curr_alignment->{start} - $prev_alignment->{end}) < $max_splice_length) ||
+#          ($curr_alignment->{reverse} &&
+#            $prev_alignment->{start} > $curr_alignment->{end} &&
+#            ($prev_alignment->{start} - $curr_alignment->{end}) < $max_splice_length))) {
+#          # Regular spliced alignment
+#          if(!$curr_alignment->{reverse}) {
+#            # We can merge the two alignments
+#            my $splice_length  = $curr_alignment->{start} - $prev_alignment->{end} - 1;
+#            $prev_alignment->{cigar} .= $splice_length . "N" . $curr_alignment->{cigar};
+#            $prev_alignment->{end} = $curr_alignment->{end};
+#          # Reverse spliced alignment
+#          } else {
+#            # We can merge the two alignments
+#            my $splice_length  = $prev_alignment->{start} - $curr_alignment->{end} - 1;
+#            $prev_alignment->{cigar} = $curr_alignment->{cigar} . $splice_length . "N" . $prev_alignment->{cigar};
+#            $prev_alignment->{start} = $curr_alignment->{start};
+#            # remove this alignment from the list
+#            shift @block_alignments;
+#          }
+#          # Update ref_end pos
+#          $prev_alignment->{ref_end} = $curr_alignment->{ref_end};
+#          # remove this alignment from the list
+#          shift @block_alignments;
+#          # Skip this alignement and go to the next one
+#          next;
+#        # Otherwise it is a chimeric alignment
+#        }
+#      # Prepend softclip if the first alignment correspond
+#      } elsif($curr_alignment->{ref_start} > $bed_line->{start}) {
+#        my $softclip_length = $curr_alignment->{ref_start} - $bed_line->{start};
+#        $curr_alignment->{cigar} = $softclip_length."S".$curr_alignment->{cigar};
+#      }
+#      $prev_alignment = $curr_alignment;
+#      push @alignments, $curr_alignment;
+#    }
+#  }
+#  # Append softclip if the last alignment does not correspond to
+#  # the bed line end
+#  my $prev_alignment = $alignments[$#alignments];
+#  # -1 because bed intervals are half-open
+#  if(defined $prev_alignment && $prev_alignment->{ref_end} < $bed_line->{end} - 1) {
+#    my $softclip_length = $bed_line->{end} - $prev_alignment->{ref_end} - 1;
+#    $prev_alignment->{cigar} .= $softclip_length."S";
+#  }
+#  return @spliced_alignments;
+#}
 
 1;
 

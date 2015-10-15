@@ -21,6 +21,8 @@ requires 'setFusedSequence';
 
 requires 'allFusedExons';
 
+requires 'getFusionOffset';
+
 # Fast accessor for chr
 sub chr {
   my $self = shift;
@@ -95,6 +97,16 @@ sub allFusedExons {
   return @fused_exons;
 }
 
+sub getFusionOffset {
+  my $self = shift;
+  my $chr_fusion_start_pos = shift;
+  if($self->strand eq '+') {
+    return $self->gene->start  - $chr_fusion_start_pos;
+  } else {
+    return $self->gene->end + $chr_fusion_start_pos;
+  }
+}
+
 package CracTools::SimCT::Fusion::FusedExon::3prim;
 
 use Moose;
@@ -141,6 +153,16 @@ sub allFusedExons {
     }
   }
   return @fused_exons;
+}
+
+sub getFusionOffset {
+  my $self = shift;
+  my $chr_fusion_start_pos = shift;
+  if($self->strand eq '+') {
+    return $self->exon->start  - $chr_fusion_start_pos;
+  } else {
+    return $self->exon->end + $chr_fusion_start_pos;
+  }
 }
 
 1;

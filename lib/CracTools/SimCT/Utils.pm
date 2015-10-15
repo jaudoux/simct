@@ -24,6 +24,11 @@ subtype 'Natural',
   as 'Int',
   where { $_ > 0 };
 
+sub reverseStrand($) {
+  my $strand = shift;
+  $strand eq '+'? return '-' : return '+';
+}
+
 sub printGTFLine($$) {
   my ($fh,$gtf) = @_;
   my $line = join ("\t",
