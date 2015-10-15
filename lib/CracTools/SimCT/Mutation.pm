@@ -75,7 +75,7 @@ sub getVCFRecord {
   if($self->referenceLength == 0 || $self->mutationLength == 0) {
     $vcf_record{pos}--;
     $vcf_record{ref} = "N".$vcf_record{ref};
-    $vcf_record{pos} = "N".$vcf_record{pos};
+    $vcf_record{alt} = "N".$vcf_record{alt};
   }
   return \%vcf_record;
 }
