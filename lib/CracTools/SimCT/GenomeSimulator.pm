@@ -155,7 +155,9 @@ sub generateGenome {
     CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$frag,$remainder);
 
     # Add the last interval to the liftover
-    $annot_lifter->addInterval($chr,$index,$chr_length-1,$offset);
+    if($index < $chr_length) {
+      $annot_lifter->addInterval($chr,$index,$chr_length-1,$offset);
+    }
 
     close($fasta_output_fh);
   }
