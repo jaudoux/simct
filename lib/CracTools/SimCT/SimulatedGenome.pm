@@ -35,16 +35,21 @@ sub BUILD {
 
     foreach my $mut ($genome_simulator->sortedMutations($chr)) {
       
-      #next if ($mut->referenceLength - $mut->mutationLength) == 0;
+      # Get the mutations pos on the simulated genome
+      my $mut_sg_pos = $mut->pos - $offset;
 
+      # add the mutation into the mutation query
+      $self->mutation_query->addInterval($chr,$mut_sg_pos,$mut_sg_pos,1,$mut);
+      
+      # Skip mutations that have no incidence on the offset
+      next if $mut->referenceLength == 1 && $mut->mutationLength == 1;
+
+      # Update prev_pos and index
       $prev_pos = $index;
-      $index    = $mut->pos - $offset;
+      $index    = $mut_sg_pos;
 
       # Add the current interval
       $self->liftover->addInterval($chr,$prev_pos,$index-1,$offset);
-
-      # Add the mutation into the mutation query
-      $self->mutation_query->addInterval($chr,$index,$index,1,$mut);
 
       # Update offset and index
       $index  += $mut->mutationLength; 
