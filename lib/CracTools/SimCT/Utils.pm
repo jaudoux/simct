@@ -12,12 +12,12 @@ subtype 'Strand',
 
 subtype 'DNA',
   as 'Str',
-  where { $_ =~ /^[ACGNT]*$/ },
+  where { $_ =~ /^[ACGNTatgcn]*$/ },
   message { "A DNA Sequence must be encoded over the [A,T,G,C,N] alphabet" };
 
 subtype 'DNAnuc',
   as 'Str',
-  where { $_ =~ /^[ACGNT]$/ },
+  where { $_ =~ /^[ACGNTatgcn]$/ },
   message { "A DNA nucleotide must be encoded over the [A,T,G,C,N] alphabet" };
 
 subtype 'Natural',
