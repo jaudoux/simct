@@ -11,6 +11,7 @@ use Cwd 'abs_path';
 use Data::Dumper;
 use Tie::RefHash;
 
+use CracTools::SimCT::Const;
 use CracTools::SimCT::Genome;
 use CracTools::SimCT::Annotations;
 use CracTools::SimCT::GenomeSimulator;
@@ -20,22 +21,39 @@ use CracTools::SimCT::FluxWrapper;
 
 my ($help,$man,$verbose);
 my ($genome_dir,$gtf_file,$flux_par,$sub_rate,$ins_rate,$del_rate,$nb_fusions);
-my $max_splice_length = 300000;
-my $output_dir = "simulation";
+my $output_dir        = $CracTools::SimCT::Const::OUTPUT_DIRECTORY;
+my $max_splice_length = $CracTools::SimCT::Const::MAX_SPLICE_LENGTH;
+my $flux_nb_reads          = $CracTools::SimCT::Const::NB_READS;
+my $flux_reads_length      = $CracTools::SimCT::Const::READS_LENGTH;
+my $flux_fragment_length   = $CracTools::SimCT::Const::FRAGMENT_LENGTH;
+my $flux_nb_molecules      = $CracTools::SimCT::Const::NB_MOLECULES;
 my $nb_process = 1;
 
 GetOptions( "v|verbose"             => \$verbose,
             "man"                   => \$man,
             "help"                  => \$help,
             "p=i"                   => \$nb_process,
+            # Input / Output
             "o|output-dir=s"        => \$output_dir,
             "g|genome-dir=s"        => \$genome_dir,
             "a|annotations=s"       => \$gtf_file,
-            "f|flux-parameters=s"   => \$flux_par,
+
+            # SimCT parameters
+
+            #"f|flux-parameters=s"   => \$flux_par,
+
+            # Mutations parameters
             "s|substitution-rate=f" => \$sub_rate,
             "i|insertion-rate=f"    => \$ins_rate,
             "d|deletion-rate=f"     => \$del_rate,
             "f|nb-fusions=i"        => \$nb_fusions,
+
+            # Flux parameters
+            "nb-reads=i"            => \$flux_nb_reads,
+            "reads-length=i"        => \$flux_reads_length,
+            "fragment-length=i"     => \$flux_fragment_length,
+            "nb-molecules=i"        => \$flux_nb_molecules,
+
           ) or pod2usage(-verbose => 1);
 
 pod2usage(-verbose => 1)  if ($help);
@@ -55,21 +73,21 @@ pod2usage(
 mkdir $output_dir;
 
 # Create the reference genome
-#print STDERR Dumper(\%reference_sequence_files);
 print STDERR "Looking for FASTA references in $genome_dir";
 opendir(GEN,$genome_dir) or die "Can't open $genome_dir: $!";
 my %reference_sequence_files = map { (my $chr = $_) =~ /(?:chr)?(\S+)\.fa(?:\.gz)?$/ => File::Spec->catfile($genome_dir,$_) } grep{ /\.fa(?:\.gz)?$/ } readdir(GEN);
 closedir(GEN);
 
-#print STDERR Dumper(\%reference_sequence_files);
+# Print friendly message with found references
 print STDERR "References found : \n".join("\n", map { "\t- ".$_." => ".$reference_sequence_files{$_}} keys %reference_sequence_files),"\n";
 
+# Create the reference genome
 print STDERR "Calculating references length\n";
 my $genome = CracTools::SimCT::Genome->new(
   reference_sequence_files => \%reference_sequence_files,
 );
 
-#print STDERR Dumper(\%reference_sequence_files);
+# Load annotations
 print STDERR "Loading annotations\n";
 # Create the annotations
 my $annotations = CracTools::SimCT::Annotations->new();
@@ -90,6 +108,7 @@ my $mutation_generator = CracTools::SimCT::MutationGenerator::Random->new(
   sub_rate          => $sub_rate,
 );
 
+# Generate mutations
 print STDERR "Generate random mutations (ins,del,sub)\n";
 $mutation_generator->generateMutations();
 
@@ -122,12 +141,14 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
   annotation_file => abs_path($simulated_annotations),
   output_dir      => $flux_output_dir,
   flux_parameters => {
-    POLYA_SHAPE   => 'NaN',
-    TSS_MEAN      => 'NaN',
-    READ_NUMBER   => 100000,
-    READ_LENGTH   => 100,
-    PAIRED_END    => 'YES',
-    NB_MOLECULES  => 100000,
+    POLYA_SHAPE       => 'NaN',
+    TSS_MEAN          => 'NaN',
+    READ_NUMBER       => $flux_nb_reads,
+    READ_LENGTH       => $flux_reads_length,
+    PAIRED_END        => 'YES',
+    NB_MOLECULES      => $flux_nb_molecules,
+    FILTERING         => 'YES',
+    SIZE_DISTRIBUTION => "N($flux_fragment_length,75)",
   },
 );
 
@@ -138,7 +159,6 @@ mkdir $rnaseq_ouput_dir;
 my %splices;
 my %chimeras;
 tie my %mutations, 'Tie::RefHash';
-
 
 my $is_paired_end = $flux_outputs->{flux_parameters}->{PAIRED_END} eq 'YES'? 1 : 0;
 
@@ -274,12 +294,19 @@ my %info = (
 );
 map { print $info_fh join("\t", $_, $info{$_}),"\n" } keys %info;
 
+# TODO remove FLUX Files
+
 # Get read alignments and updates splices, mutations and chimeras
+# TODO Split this function is three different ones :
+# - getReadAlignment
+# - getOverlappingMutations
+# - updateSplicesAndChimeras
 sub getReadAlignments {
   my ($bed_line, $simulated_genome, $read_id, $splices, $chimeras, $mutations, $reversed) = @_;
   my @intervals = ();
   # Create an array of intervals and retrieve mutations
   foreach my $block (@{$bed_line->{blocks}}) {
+    # TODO we could do the "real strand" conversion here, nop?
     push @intervals, [
       $bed_line->{chr},
       $block->{ref_start},
@@ -349,9 +376,7 @@ sub getReadAlignments {
         $alignment->{chr},
         $alignment->{reverse}? 
           $alignment->{end} : $alignment->{start},
-        $reversed? 
-          CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) : 
-          $alignment->{strand},
+        $real_strand,
       );
       push @{$chimeras->{$chim_key}},$read_id;
     }

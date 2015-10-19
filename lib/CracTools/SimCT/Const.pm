@@ -16,5 +16,12 @@ our $FLUX_BINARY          = 'flux-simulator';
 our $FLUX_OUTPUT_BASENAME = "fluxSimulator";
 our $CHR_FUSIONS          = "Fusions";
 our $MAX_SPLICE_LENGTH    = 300000;
+our $OUTPUT_DIRECTORY     = "simCT_simulation";
+
+# Flux-simulator default parameters
+our $NB_MOLECULES         = 5000000;
+our $NB_READS             = 1000000;
+our $READS_LENGTH         = 100;
+our $FRAGMENT_LENGTH      = 300;
 
 1;
