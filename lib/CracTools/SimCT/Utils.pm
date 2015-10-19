@@ -12,13 +12,13 @@ subtype 'Strand',
 
 subtype 'DNA',
   as 'Str',
-  where { $_ =~ /^[ACGNTatgcn]*$/ },
-  message { "A DNA Sequence must be encoded over the [A,T,G,C,N] alphabet" };
+  where { $_ =~ /^[ACGNTRYSWKMBDHVatgcnryswkmbdhv]*$/ },
+  message { "A DNA Sequence must be encoded over the alphabet defined by IUPAC code" };
 
 subtype 'DNAnuc',
   as 'Str',
-  where { $_ =~ /^[ACGNTatgcn]$/ },
-  message { "A DNA nucleotide must be encoded over the [A,T,G,C,N] alphabet" };
+  where { $_ =~ /^[ACGNTRYSWKMBDHVatgcnryswkmbdhv]$/ },
+  message { "A DNA nucleotide must be encoded over the alphabet defined by IUPAC code" };
 
 subtype 'Natural',
   as 'Int',
