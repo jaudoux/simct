@@ -6,7 +6,7 @@ use Moose;
 use List::Util qw(min max);
 use CracTools::Interval::Query;
 use CracTools::SimCT::Const;
-#use Data::Dumper;
+use Data::Dumper;
 
 has 'interval_query' => (
   is  => 'ro',
@@ -72,6 +72,7 @@ sub shiftInterval {
       end     => $shifted_end,
       ref_start => $ref_start,
       ref_end   => $ref_end,
+      ref_length => $ref_end - $ref_start + 1,
       chr     => $chr_dest,
       strand  => $new_strand,
       reverse => $reverse,
@@ -137,8 +138,9 @@ sub getAlignments {
       }
       # Update ref start and end 
       #$current_interval->{ref_start}  = $shifted_interval->{ref_start};
-      $current_interval->{ref_end}    = $shifted_interval->{ref_end};
-      $current_interval->{end}        = $shifted_interval->{end};
+      $current_interval->{ref_end}     = $shifted_interval->{ref_end};
+      $current_interval->{end}         = $shifted_interval->{end};
+      $current_interval->{ref_length} += $shifted_interval->{ref_length};
     # Otherwise it is a chimeric alignment
     } else {
       $current_interval = $shifted_interval;
@@ -155,62 +157,82 @@ sub getSplicedAlignments {
   my $self = shift;
   my @intervals = @_;
   my @alignments;
+  my $query_length = 0;
   # Loop over splices
   foreach my $interval (@intervals) {
+    my $query_start  = $interval->[1];
+    my $query_end    = $interval->[2];
+
     # First we get shifted intervals
     my @block_alignments = $self->getAlignments(@{$interval});
 
     my $prev_alignment = $alignments[$#alignments];
     foreach my $curr_alignment (@block_alignments) {
       # If it is not the first alignment we look for a splice
-      # or a chimeric alignement
-      if(defined $prev_alignment) {
-        # Check if we have a splice alignment
-        if($prev_alignment->{chr} eq $curr_alignment->{chr} &&
-          $prev_alignment->{strand} eq $curr_alignment->{strand} &&
-          $prev_alignment->{reverse} == $curr_alignment->{reverse} &&
-          ((!$curr_alignment->{reverse} && 
-            $prev_alignment->{end} < $curr_alignment->{start}) ||
-          ($curr_alignment->{reverse} &&
-            $prev_alignment->{start} > $curr_alignment->{end}))) {
-          # Regular spliced alignment
-          if(!$curr_alignment->{reverse}) {
-            # We can merge the two alignments
-            my $splice_length  = $curr_alignment->{start} - $prev_alignment->{end} - 1;
-            $prev_alignment->{cigar} .= $splice_length . "N" . $curr_alignment->{cigar};
-            $prev_alignment->{end} = $curr_alignment->{end};
-          # Reverse spliced alignment
-          } else {
-            # We can merge the two alignments
-            my $splice_length  = $prev_alignment->{start} - $curr_alignment->{end} - 1;
-            $prev_alignment->{cigar} = $curr_alignment->{cigar} . $splice_length . "N" . $prev_alignment->{cigar};
-            $prev_alignment->{start} = $curr_alignment->{start};
-          }
-          # Update ref_end pos
-          $prev_alignment->{ref_end} = $curr_alignment->{ref_end};
-          # Skip this alignement and go to the next one
-          next;
-        # Otherwise it is a chimeric alignment
+      # alignement
+      if(defined $prev_alignment &&
+        $prev_alignment->{chr} eq $curr_alignment->{chr} &&
+        $prev_alignment->{strand} eq $curr_alignment->{strand} &&
+        $prev_alignment->{reverse} == $curr_alignment->{reverse} &&
+        ((!$curr_alignment->{reverse} && 
+          $prev_alignment->{end} < $curr_alignment->{start}) ||
+        ($curr_alignment->{reverse} &&
+          $prev_alignment->{start} > $curr_alignment->{end}))) {
+        # Regular spliced alignment
+        if(!$curr_alignment->{reverse}) {
+          # We can merge the two alignments
+          my $splice_length  = $curr_alignment->{start} - $prev_alignment->{end} - 1;
+          $prev_alignment->{cigar} .= $splice_length . "N" . $curr_alignment->{cigar};
+          $prev_alignment->{end} = $curr_alignment->{end};
+        # Reverse spliced alignment
+        } else {
+          # We can merge the two alignments
+          my $splice_length  = $prev_alignment->{start} - $curr_alignment->{end} - 1;
+          $prev_alignment->{cigar} = $curr_alignment->{cigar} . $splice_length . "N" . $prev_alignment->{cigar};
+          $prev_alignment->{start} = $curr_alignment->{start};
         }
+        # Update ref_end pos
+        $prev_alignment->{ref_end} = $curr_alignment->{ref_end};
+        $prev_alignment->{ref_length} += $curr_alignment->{ref_length};
+        # Skip this alignement and go to the next one
+        next;
+      # Otherwise it is a the first or a chimeric alignment and we 
+      # can set the left softclip
+      } else {
+        $curr_alignment->{left_softclip} = $curr_alignment->{ref_start} - $query_start + $query_length;
       }
       $prev_alignment = $curr_alignment;
       push @alignments, $curr_alignment;
     }
+    $query_length += $query_end - $query_start + 1;
   }
-  # Prepend softclip if needed
-  my $first_alignment = $alignments[0];
-  my $first_interval  = $intervals[0];
-  if(defined $first_alignment && $first_alignment->{ref_start} > $first_interval->[1]) {
-    my $softclip_length = $first_alignment->{ref_start} - $first_interval->[1];
-    $first_alignment->{cigar} = $softclip_length."S".$first_alignment->{cigar};
+  # Set right softclips
+  foreach my $alignment (@alignments) {
+    $alignment->{right_softclip} = $query_length - $alignment->{left_softclip} - $alignment->{ref_length};
+    #$alignment->{cigar}  = $alignment->{left_softclip}."S".$alignment->{cigar} if $alignment->{left_softclip} > 0;
+    #$alignment->{cigar} .= $alignment->{right_softclip}."S" if $alignment->{right_softclip} > 0;
   }
-  # Append softclip if needed
-  my $last_alignment = $alignments[$#alignments];
-  my $last_interval  = $intervals[$#intervals];
-  if(defined $last_alignment && $last_alignment->{ref_end} < $last_interval->[2] - 1) {
-    my $softclip_length = $last_interval->[2] - $last_alignment->{ref_end};
-    $last_alignment->{cigar} .= $softclip_length."S";
-  }
+  #my $query_start  = $intervals[0]->[1];
+  #my $query_end    = $intervals[$#intervals]->[2];
+  ## Prepend and append softclips
+  #foreach my $alignment (@alignments) {
+  #  if($alignment->{ref_start} > $query_start) {
+  #    my $softclip_length = $alignment->{ref_start} - $query_start;
+  #    if($softclip_length > 100) {
+  #      print STDERR "Query START: $query_start\n";
+  #      print STDERR Dumper($alignment);
+  #    }
+  #    $alignment->{cigar} = $softclip_length."S".$alignment->{cigar};
+  #  }
+  #  if($alignment->{ref_end} < $query_end) {
+  #    my $softclip_length  = $query_end - $alignment->{ref_end};
+  #    if($softclip_length > 100) {
+  #      print STDERR "Query END: $query_end\n";
+  #      print STDERR Dumper($alignment);
+  #    }
+  #    $alignment->{cigar} .= $softclip_length."S";
+  #  }
+  #}
   return @alignments;
 }
 

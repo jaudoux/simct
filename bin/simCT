@@ -296,12 +296,22 @@ sub getReadAlignments {
   };
   # Generate the corresponding alignments
   my @alignments = $simulated_genome->liftover->getSplicedAlignments(@intervals);
+  # Reverse alignments if needed and add softclips
+  @alignments = reverse @alignments if $bed_line->{strand} eq '-';
+  foreach my $alignment (@alignments) {
+    my $left_softclip = $bed_line->{strand} eq '-'?
+      $alignment->{right_softclip} : $alignment->{left_softclip};
+    my $right_softclip = $bed_line->{strand} eq '-'?
+      $alignment->{left_softclip} : $alignment->{right_softclip};
+    $alignment->{cigar}  = $left_softclip."S".$alignment->{cigar} if $left_softclip > 0;
+    $alignment->{cigar} .= $right_softclip."S" if $right_softclip > 0;
+  }
   # Browse the alignments for splices and chimeras
   my $prev_alignment;
   foreach my $alignment (@alignments) {
     my $real_strand = $reversed? 
       CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) : 
-      $alignment->{strand},
+      $alignment->{strand};
     my @cigar;
     while($alignment->{cigar} =~ /(\d+)(\S)/g) {
       push @cigar, { op => $2, nb => $1 };
