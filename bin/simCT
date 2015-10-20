@@ -19,6 +19,41 @@ use CracTools::SimCT::MutationGenerator::Random;
 use CracTools::SimCT::MutationGenerator::Fusion;
 use CracTools::SimCT::FluxWrapper;
 
+=head1 SYNOPSIS
+
+simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
+
+=head1 OPTIONS
+
+=head2 General
+
+  --help                  Print this help
+  --man                   Open man page
+  -p                      Number of threads/processes
+
+=head2 Input / Output
+
+  -o,--output-dir         Output directory (DEFAULT: 'simCT_simulation') 
+  -g,--genome-dir         Reference genome directory (with chromosomes splited in individual FASTA files)
+  -a,--annotations        Annotations file in GTF format
+
+=head2 Genome simulation
+
+  -s,--substitution-rate  Rate a wich substitutions are randomly inserted in the reference genome
+  -i,--insertion-rate     Rate a wich insertions are randomly inserted in the reference genome
+  -d,--deltion-rate       Rate a wich deletions are randomly inserted in the reference genome
+  -f,--nb-fusions         Number of fusions introduced in the simulated genome
+
+=head2 Sequencing
+
+  --nb-molecules          Number of moleclules in the sample
+  --nb-reads              Number of reads sequenced
+  --read-length           Length of sequenced reads
+  --fragment-length       Mean fragment length
+  --fragment-sd           Standard deviation of fragment length
+
+=cut
+
 my ($help,$man,$verbose);
 my ($genome_dir,$gtf_file,$flux_par,$sub_rate,$ins_rate,$del_rate,$nb_fusions);
 my $output_dir        = $CracTools::SimCT::Const::OUTPUT_DIRECTORY;
@@ -26,6 +61,7 @@ my $max_splice_length = $CracTools::SimCT::Const::MAX_SPLICE_LENGTH;
 my $flux_nb_reads          = $CracTools::SimCT::Const::NB_READS;
 my $flux_reads_length      = $CracTools::SimCT::Const::READS_LENGTH;
 my $flux_fragment_length   = $CracTools::SimCT::Const::FRAGMENT_LENGTH;
+my $flux_fragment_sd       = $CracTools::SimCT::Const::FRAGMENT_SD;
 my $flux_nb_molecules      = $CracTools::SimCT::Const::NB_MOLECULES;
 my $nb_process = 1;
 
@@ -39,7 +75,6 @@ GetOptions( "v|verbose"             => \$verbose,
             "a|annotations=s"       => \$gtf_file,
 
             # SimCT parameters
-
             #"f|flux-parameters=s"   => \$flux_par,
 
             # Mutations parameters
@@ -52,6 +87,7 @@ GetOptions( "v|verbose"             => \$verbose,
             "nb-reads=i"            => \$flux_nb_reads,
             "reads-length=i"        => \$flux_reads_length,
             "fragment-length=i"     => \$flux_fragment_length,
+            "fragment-sd=i"         => \$flux_fragment_sd,
             "nb-molecules=i"        => \$flux_nb_molecules,
 
           ) or pod2usage(-verbose => 1);
@@ -133,6 +169,7 @@ my $simulated_genome = $genome_simulator->generateGenome(
 );
 
 # Generate RNA-Seq reads for this genome
+print STDERR "Generate flux simulation\n";
 my $flux_wrapper    = CracTools::SimCT::FluxWrapper->new();
 my $flux_output_dir = File::Spec->catfile($output_dir,"flux_simulation");
 mkdir $flux_output_dir;
@@ -148,13 +185,15 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
     PAIRED_END        => 'YES',
     NB_MOLECULES      => $flux_nb_molecules,
     FILTERING         => 'YES',
-    SIZE_DISTRIBUTION => "N($flux_fragment_length,75)",
+    SIZE_DISTRIBUTION => "N($flux_fragment_length,$flux_fragment_sd)",
   },
 );
 
 # Finally we generate truth databases for this simulation
-my $rnaseq_ouput_dir  = File::Spec->catfile($output_dir,"rna_seq");
-mkdir $rnaseq_ouput_dir;
+print STDERR "Create truth databases\n";
+#my $rnaseq_ouput_dir  = File::Spec->catfile($output_dir,"rna_seq");
+#mkdir $rnaseq_ouput_dir;
+my $rnaseq_ouput_dir  = $output_dir;
 
 my %splices;
 my %chimeras;

@@ -6,7 +6,7 @@ package CracTools::SimCT::Const;
 
 # Tolerance on mapping position
 our $SUB_RATE             = 0.005;
-our $INS_RATE             = 0.001;
+our $INS_RATE             = 0.005;
 our $DEL_RATE             = 0.001;
 our $MAX_INS              = 15;
 our $MAX_DEL              = 15;
@@ -23,5 +23,6 @@ our $NB_MOLECULES         = 5000000;
 our $NB_READS             = 1000000;
 our $READS_LENGTH         = 100;
 our $FRAGMENT_LENGTH      = 300;
+our $FRAGMENT_SD          = 75;
 
 1;

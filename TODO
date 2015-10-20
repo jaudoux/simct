@@ -5,6 +5,7 @@
 - [ ] Introduce CNV variants
 
 ## 
+- [ ] Print simCT configuration values (ins_rate and such in a output file) in STDERR so it can be redirected to some "log" file
 - [ ] Add a mutation generator that is based on a VCF file for example the one from dbSNP
 - [ ] Find a syntax for generating a simulated experiment (in YAML if possible)
 - [ ] We should be able to run the pipeline step separatly if we want (like FLUX does)
