@@ -1,18 +1,16 @@
-
 # TODO
-- [ ] Add SAM support for alignements or alignment should be encoded in reads names?
-      Readname seems to be the best solution, and it can still be transformed to
-      BAM, err-file and such
+
+## New features
+- [ ] Introduce repeat mutations
+- [ ] Introduce CNV variants
+
+## 
 - [ ] Add a mutation generator that is based on a VCF file for example the one from dbSNP
 - [ ] Find a syntax for generating a simulated experiment (in YAML if possible)
 - [ ] We should be able to run the pipeline step separatly if we want (like FLUX does)
-- [ ] Output should be compressed to GZIP
-- [x] Break the genomeSimulator in more pieces...
-- [ ] Generates chimera output
 - [ ] Introduce a model to create multi-genome samples with a kind of phylogeny
 - [ ] Use flux to samples these genomes with the same expression profile but
       with minor changes
-- [ ] Introduce "repeats" features
 - [ ] Complete code documentation
 - [ ] Complete code unit-tests
 - [ ] Simplify the fusion creation : only pass the two exons in argument...
@@ -20,7 +18,15 @@
 - [ ] Sort FASTQ sequences by start position of mapping to maximise the compression!!!
 - [ ] Find a nicer way to encode error positiions in read names with a more compact
       style
-- [ ] Place code from simCT into a new module (for flux-output post-process mainly)
+- [ ] Find a nice way to specify (in the CL) the mutations rates for both random and vcf-based
+      mutations generator
+- [x] Place code from simCT into a new module (for flux-output post-process mainly)
+- [x] Output should be compressed to GZIP
+- [x] Break the genomeSimulator in more pieces...
+- [x] Generates chimera output
+- [x] Add SAM support for alignements or alignment should be encoded in reads names?
+      Readname seems to be the best solution, and it can still be transformed to
+      BAM, err-file and such
 
 The output of simCT should be:
 
