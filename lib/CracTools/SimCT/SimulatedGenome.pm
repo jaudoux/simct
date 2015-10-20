@@ -56,7 +56,9 @@ sub BUILD {
       $offset += ($mut->referenceLength - $mut->mutationLength);
     }
     # Add the last interval
-    $self->liftover->addInterval($chr,$index,$chr_length-1,$offset);
+    if($index < $chr_length) {
+      $self->liftover->addInterval($chr,$index,$chr_length-1,$offset);
+    }
   }
 
   # Add fusions in the liftover query
