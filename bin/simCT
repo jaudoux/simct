@@ -339,10 +339,7 @@ sub getReadAlignments {
     my $real_strand = $reversed? 
       CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) : 
       $alignment->{strand};
-    my @cigar;
-    while($alignment->{cigar} =~ /(\d+)(\S)/g) {
-      push @cigar, { op => $2, nb => $1 };
-    }
+    my @cigar = @{CracTools::Utils::parseCigarChain($alignment->{cigar})};
     my $start = $alignment->{start};
     foreach my $cigel (@cigar) {
       if($cigel->{op} eq 'N') {
