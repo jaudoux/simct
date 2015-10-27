@@ -52,6 +52,10 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
   --fragment-length       Mean fragment length
   --fragment-sd           Standard deviation of fragment length
 
+=head2 Others
+
+  --disable-error-encoding    Remove error encoding from read names
+
 =cut
 
 my ($help,$man,$verbose);
@@ -63,6 +67,7 @@ my $flux_reads_length      = $CracTools::SimCT::Const::READS_LENGTH;
 my $flux_fragment_length   = $CracTools::SimCT::Const::FRAGMENT_LENGTH;
 my $flux_fragment_sd       = $CracTools::SimCT::Const::FRAGMENT_SD;
 my $flux_nb_molecules      = $CracTools::SimCT::Const::NB_MOLECULES;
+my $disable_error_encoding = 0;
 my $nb_process = 1;
 
 GetOptions( "v|verbose"             => \$verbose,
@@ -75,6 +80,7 @@ GetOptions( "v|verbose"             => \$verbose,
             "a|annotations=s"       => \$gtf_file,
 
             # SimCT parameters
+            "disable-error-encoding"=> \$disable_error_encoding,
             #"f|flux-parameters=s"   => \$flux_par,
 
             # Mutations parameters
@@ -233,7 +239,7 @@ while (my $bed_line = $bed_it->()) {
   $nb_errors += scalar @{$errors_pos};
   my $fh = ($i % 2 == 0) || !$is_paired_end? $fastq1_output_fh : $fastq2_output_fh;
   CracTools::Utils::writeSeq($fh,'fastq',
-    getReadName($i,$alignments,$errors_pos),
+    $disable_error_encoding? getReadName($i,$alignments) : getReadName($i,$alignments,$errors_pos),
     $read->{seq},
     $read->{qual}
   );
