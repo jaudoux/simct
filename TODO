@@ -17,7 +17,7 @@
 - [ ] Simplify the fusion creation : only pass the two exons in argument...
 - [ ] Save simulated genome so it can be reconstructed latter
 - [ ] Sort FASTQ sequences by start position of mapping to maximise the compression!!!
-- [ ] Find a nicer way to encode error positiions in read names with a more compact
+- [x] Find a nicer way to encode error positiions in read names with a more compact
       style
 - [ ] Find a nice way to specify (in the CL) the mutations rates for both random and vcf-based
       mutations generator
@@ -46,7 +46,9 @@ format for encoded alignements and errors into the read-name
 
 (genome_id)id:(chr,(-)pos,cigar(;)?)+,(err_pos(;)?)+
 
-ex: a0:1,12345,20M2I3X30M;2:-6789:20M:1,2,3,4
+ex: a0:1,12345,20M2I3X30M;2:-6789:20M:CABgAAAKAAEAABgCAAAABABAQAAgAAACDD
+
+CABgAAAKAAEAABgCAAAABABAQAAgAAACDD : encoded error list in base 64 (decode as follow : 1,12,23,43,45,62,78,89,91,120,132,148,167,187,192,193,198,199)
 
 # Multi-clonal model
 1. Multi-genomes => Choose a method to create the pylogenye of simulated genomes...

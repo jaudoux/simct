@@ -421,6 +421,60 @@ sub getReadAlignments {
   return \@alignments;
 }
 
+# Encode error list into base64
+sub encodeBase64 {
+
+    my ($read_length, @Error) = @_;
+    my (@bitList,@encoded); 
+    my $BITNESS = 6;
+    my @base64 = qw(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9 + /);
+
+# Put 0 at all position
+    for (my $i = 0; $i < $read_length; $i++) {
+
+        $bitList[$i] = 0;
+    }
+# Create bit vector in base64
+    foreach my $j (@Error) {
+
+        $bitList[int(($j / $BITNESS))] |= (1 << ($j % $BITNESS));
+    }
+# Convert bitList into string_base64
+    for(my $k=0; $k <= $read_length; $k++) {
+
+        push @encoded, scalar($base64[$bitList[$k]]); 
+    }
+    return @encoded;
+}
+
+# Decode base 64 error list
+sub decodeBase64 {
+
+    my @Error = @_;
+    my $BITNESS = 6;
+    my @base64 = qw(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9 + /);
+    my (@index,@decoded);
+
+#Looking for index of each char
+    foreach my $j (@Error) {
+
+        my @ind = grep { $base64[$_] eq $j } 0 .. $#base64;
+        push(@index,$ind[0]);
+    }
+# Convert into list position     
+    for (my $e = 0; $e < (0+@Error);$e++) {
+
+        for(my $i=0; $i<$BITNESS; $i++) {
+
+            if ($index[$e] & (1 << $i)) {
+                my $pos = (int($i+$BITNESS*$e));
+                push(@decoded,$pos);
+            }
+        }
+    }  
+    return @decoded; 
+}
+
 # Give 
 sub getReadName {
   my ($read_id,$alignments,$errors_pos) = @_;
@@ -437,10 +491,10 @@ sub getReadName {
       } @{$alignments},
     ),
   );
-  # TODO find a better way to encode the error position with a compacting
   # strategy
   if(@{$errors_pos}) {
-    $read_name = join(":",$read_name,join(",",@{$errors_pos}));
+    my @encoded_error = encodeBase64($flux_reads_length,@{$errors_pos}); 
+    $read_name = join(":",$read_name,join("",@encoded_error));
   }
   return $read_name;
 }
