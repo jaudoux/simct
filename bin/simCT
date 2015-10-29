@@ -10,6 +10,7 @@ use File::Spec;
 use Cwd 'abs_path';
 use Data::Dumper;
 use Tie::RefHash;
+use List::Util qw(first);
 
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Genome;
@@ -233,7 +234,7 @@ while (my $bed_line = $bed_it->()) {
   $nb_errors += scalar @{$errors_pos};
   my $fh = ($i % 2 == 0) || !$is_paired_end? $fastq1_output_fh : $fastq2_output_fh;
   CracTools::Utils::writeSeq($fh,'fastq',
-    getReadName($i,$alignments,$errors_pos),
+    getReadName($i,$alignments,$errors_pos,$flux_reads_length),
     $read->{seq},
     $read->{qual}
   );
@@ -421,6 +422,36 @@ sub getReadAlignments {
   return \@alignments;
 }
 
+
+
+# Give 
+sub getReadName {
+  my ($read_id,$alignments,$errors_pos,$read_length) = @_;
+  my @encoded;
+  my $encoded_list; 
+  my $read_name = join(":",
+    $read_id,
+    join(";",
+      map { 
+        join(",",
+          $_->{chr},
+          $_->{start},
+          $_->{strand},
+          $_->{cigar},
+        )
+      } @{$alignments},
+    ),
+  );
+ # Encode position list in base 64 
+ if(@{$errors_pos}) {
+    $read_name = join(":",$read_name,join(",",@{$errors_pos}));
+    @encoded = encodeBase64($read_length,@{$errors_pos});
+    $encoded_list = join(",",@encoded);
+    $read_name = join(":",$read_name,$encoded_list);
+    }
+  return $read_name;
+}
+
 # Encode error list into base64
 sub encodeBase64 {
 
@@ -430,17 +461,17 @@ sub encodeBase64 {
     my @base64 = qw(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9 + /);
 
 # Put 0 at all position
-    for (my $i = 0; $i < $read_length; $i++) {
+    for (my $i = 0; $i < int($read_length/$BITNESS); $i++) {
 
         $bitList[$i] = 0;
     }
 # Create bit vector in base64
     foreach my $j (@Error) {
 
-        $bitList[int(($j / $BITNESS))] |= (1 << ($j % $BITNESS));
+        $bitList[int($j / $BITNESS)] |= (1 << ($j % $BITNESS));
     }
 # Convert bitList into string_base64
-    for(my $k=0; $k <= $read_length; $k++) {
+    for(my $k=0; $k <= int($read_length/$BITNESS); $k++) {
 
         push @encoded, scalar($base64[$bitList[$k]]); 
     }
@@ -473,28 +504,4 @@ sub decodeBase64 {
         }
     }  
     return @decoded; 
-}
-
-# Give 
-sub getReadName {
-  my ($read_id,$alignments,$errors_pos) = @_;
-  my $read_name = join(":",
-    $read_id,
-    join(";",
-      map { 
-        join(",",
-          $_->{chr},
-          $_->{start},
-          $_->{strand},
-          $_->{cigar},
-        )
-      } @{$alignments},
-    ),
-  );
-  # strategy
-  if(@{$errors_pos}) {
-    my @encoded_error = encodeBase64($flux_reads_length,@{$errors_pos}); 
-    $read_name = join(":",$read_name,join("",@encoded_error));
-  }
-  return $read_name;
 }
