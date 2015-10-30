@@ -444,9 +444,8 @@ sub getReadName {
   );
  # Encode position list in base 64 
  if(@{$errors_pos}) {
-    $read_name = join(":",$read_name,join(",",@{$errors_pos}));
     @encoded = encodeBase64($read_length,@{$errors_pos});
-    $encoded_list = join(",",@encoded);
+    $encoded_list = join("",@encoded);
     $read_name = join(":",$read_name,$encoded_list);
     }
   return $read_name;
@@ -461,7 +460,7 @@ sub encodeBase64 {
     my @base64 = qw(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z 0 1 2 3 4 5 6 7 8 9 + /);
 
 # Put 0 at all position
-    for (my $i = 0; $i < int($read_length/$BITNESS); $i++) {
+    for (my $i = 0; $i < int($read_length/$BITNESS)+1; $i++) {
 
         $bitList[$i] = 0;
     }
@@ -488,15 +487,12 @@ sub decodeBase64 {
 
 #Looking for index of each char
     foreach my $j (@Error) {
-
         my @ind = grep { $base64[$_] eq $j } 0 .. $#base64;
         push(@index,$ind[0]);
     }
 # Convert into list position     
     for (my $e = 0; $e < (0+@Error);$e++) {
-
         for(my $i=0; $i<$BITNESS; $i++) {
-
             if ($index[$e] & (1 << $i)) {
                 my $pos = (int($i+$BITNESS*$e));
                 push(@decoded,$pos);
