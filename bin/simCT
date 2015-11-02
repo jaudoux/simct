@@ -72,6 +72,8 @@ my $flux_nb_molecules      = $CracTools::SimCT::Const::NB_MOLECULES;
 my $disable_error_encoding = 0;
 my $nb_process = 1;
 
+my @copy_ARGV = @ARGV;
+
 GetOptions( "v|verbose"             => \$verbose,
             "man"                   => \$man,
             "help"                  => \$help,
@@ -338,6 +340,8 @@ my %info = (
   nb_splices    => scalar keys %splices,
   nb_chimeras   => scalar keys %chimeras,
   nb_mutations  => scalar keys %mutations,
+  simCT_version => $CracTools::SimCT::VERSION,
+  command_args  => join(" ",@copy_ARGV), 
 );
 map { print $info_fh join("\t", $_, $info{$_}),"\n" } keys %info;
 
