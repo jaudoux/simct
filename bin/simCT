@@ -10,7 +10,9 @@ use File::Spec;
 use Cwd 'abs_path';
 use Data::Dumper;
 use Tie::RefHash;
+use List::Util qw(first);
 
+use CracTools::Utils 1.24;
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Genome;
 use CracTools::SimCT::Annotations;
@@ -41,14 +43,14 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 
   -s,--substitution-rate  Rate a wich substitutions are randomly inserted in the reference genome
   -i,--insertion-rate     Rate a wich insertions are randomly inserted in the reference genome
-  -d,--deltion-rate       Rate a wich deletions are randomly inserted in the reference genome
+  -d,--deletion-rate      Rate a wich deletions are randomly inserted in the reference genome
   -f,--nb-fusions         Number of fusions introduced in the simulated genome
 
 =head2 Sequencing
 
   --nb-molecules          Number of moleclules in the sample
   --nb-reads              Number of reads sequenced
-  --read-length           Length of sequenced reads
+  --reads-length          Length of sequenced reads
   --fragment-length       Mean fragment length
   --fragment-sd           Standard deviation of fragment length
 
@@ -427,6 +429,8 @@ sub getReadAlignments {
   return \@alignments;
 }
 
+
+
 # Give 
 sub getReadName {
   my ($read_id,$alignments,$errors_pos) = @_;
@@ -443,10 +447,12 @@ sub getReadName {
       } @{$alignments},
     ),
   );
-  # TODO find a better way to encode the error position with a compacting
-  # strategy
+  # Encode position list in base 64 
   if(@{$errors_pos}) {
-    $read_name = join(":",$read_name,join(",",@{$errors_pos}));
+    $read_name = join(":",$read_name,CracTools::Utils::encodePosListToBase64(@{$errors_pos}));
   }
+  # Truncate read name if greater than 255 char (Maximum length authorized for BAM encoding)
+  $read_name = substr $read_name, 0, 255 if length $read_name > 255;
   return $read_name;
 }
+
