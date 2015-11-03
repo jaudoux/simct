@@ -65,20 +65,25 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 =head2 Others
 
   --disable-error-encoding    Remove error encoding from read names
+  --uniq-ids                  Read names are identical for both pairs
 
 =cut
 
 my ($help,$man,$verbose);
-my ($genome_dir,$gtf_file,$flux_par,$sub_rate,$ins_rate,$del_rate,$nb_fusions,$vcf_file);
-my $output_dir        = $CracTools::SimCT::Const::OUTPUT_DIRECTORY;
-my $max_splice_length = $CracTools::SimCT::Const::MAX_SPLICE_LENGTH;
+my ($disable_error_encoding,$uniq_ids);
+my ($genome_dir,$gtf_file,$flux_par,$vcf_file);
+my $sub_rate               = $CracTools::SimCT::Const::SUB_RATE;
+my $ins_rate               = $CracTools::SimCT::Const::INS_RATE;
+my $del_rate               = $CracTools::SimCT::Const::DEL_RATE;
+my $output_dir             = $CracTools::SimCT::Const::OUTPUT_DIRECTORY;
+my $max_splice_length      = $CracTools::SimCT::Const::MAX_SPLICE_LENGTH;
 my $flux_nb_reads          = $CracTools::SimCT::Const::NB_READS;
 my $flux_reads_length      = $CracTools::SimCT::Const::READS_LENGTH;
 my $flux_fragment_length   = $CracTools::SimCT::Const::FRAGMENT_LENGTH;
 my $flux_fragment_sd       = $CracTools::SimCT::Const::FRAGMENT_SD;
 my $flux_nb_molecules      = $CracTools::SimCT::Const::NB_MOLECULES;
-my $disable_error_encoding = 0;
 my $vcf_ratio  = 0.8;
+my $nb_fusions = 0;
 my $nb_process = 1;
 
 my @ARGV_copy = @ARGV;
@@ -94,6 +99,7 @@ GetOptions( "v|verbose"             => \$verbose,
 
             # SimCT parameters
             "disable-error-encoding"=> \$disable_error_encoding,
+            "uniq-ids"              => \$uniq_ids,
             #"f|flux-parameters=s"   => \$flux_par,
 
             # Mutations parameters
@@ -259,6 +265,10 @@ my $fastq2_output_fh = $is_paired_end?
 
 my $i = 0;
 my $nb_errors = 0;
+my $paired_alignments;
+my $paired_errors_pos;
+my $paired_seq;
+my $paired_qual;
 while (my $bed_line = $bed_it->()) {
   my $read = $fastq_it->();
   my $alignments = getReadAlignments(
@@ -272,12 +282,34 @@ while (my $bed_line = $bed_it->()) {
   );
   my $errors_pos = CracTools::SimCT::FluxWrapper::getErrorsPos($read->{seq});
   $nb_errors += scalar @{$errors_pos};
-  my $fh = ($i % 2 == 0) || !$is_paired_end? $fastq1_output_fh : $fastq2_output_fh;
-  CracTools::Utils::writeSeq($fh,'fastq',
-    $disable_error_encoding? getReadName($i,$alignments) : getReadName($i,$alignments,$errors_pos),
-    $read->{seq},
-    $read->{qual}
-  );
+  if($is_paired_end && $uniq_ids) {
+    # This is the first pair, we only record the alignments and errors
+    if($i % 2 == 0) {
+      $paired_alignments = $alignments;
+      $paired_errors_pos = $errors_pos;
+      $paired_seq        = $read->{seq};
+      $paired_qual       = $read->{qual};
+    # This is the second pair, we merge alignments and errors and print
+    # both reads to their respective files with the same read_name
+    } else {
+      unshift @{$alignments}, @{$paired_alignments};
+      unshift @{$errors_pos}, @{$paired_errors_pos};
+      my @sorted_uniq_errors = do { my %seen; grep { !$seen{$_}++ } sort @{$errors_pos}};
+      my $read_name = $disable_error_encoding? 
+        getReadName(($i-1)/2,$alignments) : 
+        getReadName(($i-1)/2,$alignments,\@sorted_uniq_errors);
+      # Write both pairs to their respective file
+      CracTools::Utils::writeSeq($fastq1_output_fh,'fastq',$read_name,$paired_seq,$paired_qual);
+      CracTools::Utils::writeSeq($fastq2_output_fh,'fastq',$read_name,$read->{seq},$read->{qual});
+    }
+  } else {
+    my $fh = ($i % 2 == 0) || !$is_paired_end? $fastq1_output_fh : $fastq2_output_fh;
+    CracTools::Utils::writeSeq($fh,'fastq',
+      $disable_error_encoding? getReadName($i,$alignments) : getReadName($i,$alignments,$errors_pos),
+      $read->{seq},
+      $read->{qual}
+    );
+  }
   $i++;
 }
 my $nb_reads = $i;
