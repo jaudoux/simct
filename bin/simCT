@@ -56,6 +56,7 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 
 =head2 Sequencing
 
+  --flux-par              Flux parameter file (prioritary over the following option)
   --nb-molecules          Number of moleclules in the sample
   --nb-reads              Number of reads sequenced
   --reads-length          Length of sequenced reads
@@ -100,7 +101,7 @@ GetOptions( "v|verbose"             => \$verbose,
             # SimCT parameters
             "disable-error-encoding"=> \$disable_error_encoding,
             "uniq-ids"              => \$uniq_ids,
-            #"f|flux-parameters=s"   => \$flux_par,
+            "flux-par=s"            => \$flux_par,
 
             # Mutations parameters
             "s|substitution-rate=f" => \$sub_rate,
@@ -220,11 +221,7 @@ print STDERR "Generate flux simulation\n";
 my $flux_wrapper    = CracTools::SimCT::FluxWrapper->new();
 my $flux_output_dir = File::Spec->catfile($output_dir,"flux_simulation");
 mkdir $flux_output_dir;
-my $flux_outputs = $flux_wrapper->generateSimulation(
-  genome_dir      => abs_path($simulated_genome_dir),
-  annotation_file => abs_path($simulated_annotations),
-  output_dir      => $flux_output_dir,
-  flux_parameters => {
+my %flux_parameters = (
     POLYA_SHAPE       => 'NaN',
     TSS_MEAN          => 'NaN',
     READ_NUMBER       => $flux_nb_reads,
@@ -233,7 +230,21 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
     NB_MOLECULES      => $flux_nb_molecules,
     FILTERING         => 'YES',
     SIZE_DISTRIBUTION => "N($flux_fragment_length,$flux_fragment_sd)",
-  },
+);
+if(defined $flux_par) {
+  my $flux_par_fh = CracTools::Utils::getReadingFileHandle($flux_par);
+  while(<$flux_par_fh>) {
+    next if $_ =~ /^#/;
+    my ($k,$v) = $_ =~ /^(\S+)\s+(\S+)/;
+    if(defined $k && defined $v) {
+      $flux_parameters{$k} = $v;
+    }
+  }
+}
+my $flux_outputs = $flux_wrapper->generateSimulation(
+  genome_dir      => abs_path($simulated_genome_dir),
+  annotation_file => abs_path($simulated_annotations),
+  output_dir      => $flux_output_dir,
 );
 
 # Finally we generate truth databases for this simulation
