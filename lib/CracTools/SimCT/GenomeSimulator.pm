@@ -164,7 +164,7 @@ sub generateGenome {
 
   # Remove silencious mutations
   my @cleaned_mutations = grep { $_->reference_sequence ne $_->mutation_sequence } $self->allMutations;
-  $self->mutations($self->mutations);
+  $self->mutations(\@cleaned_mutations);
 
   # Remove undefined fusions
   my @cleaned_fusions = grep { $_->isFusionSequenceDefined } $self->allFusions;
