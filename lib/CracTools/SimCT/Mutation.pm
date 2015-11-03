@@ -1,4 +1,5 @@
 package CracTools::SimCT::Mutation;
+# ABSTRACT: Base class for mutations
 
 #use Moose::Role;
 use Moose;

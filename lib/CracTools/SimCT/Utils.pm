@@ -1,4 +1,5 @@
 package CracTools::SimCT::Utils;
+# ABSTRACT: Utility subroutines and types
 
 use Moose::Util::TypeConstraints;
 

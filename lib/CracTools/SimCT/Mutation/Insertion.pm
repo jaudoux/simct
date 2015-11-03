@@ -1,4 +1,5 @@
 package CracTools::SimCT::Mutation::Insertion;
+# ABSTRACT: Mutation of type 'insertion'
 
 use Moose;
 

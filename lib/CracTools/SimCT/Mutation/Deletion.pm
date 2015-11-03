@@ -1,4 +1,5 @@
 package CracTools::SimCT::Mutation::Deletion;
+# ABSTRACT: Mutation of type 'deletion'
 
 use Moose;
 

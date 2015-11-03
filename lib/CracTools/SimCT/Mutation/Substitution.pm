@@ -1,4 +1,5 @@
 package CracTools::SimCT::Mutation::Substitution;
+# ABSTRACT: Mutation of type 'substitution'
 
 use Moose;
 
