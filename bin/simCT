@@ -245,6 +245,7 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
   genome_dir      => abs_path($simulated_genome_dir),
   annotation_file => abs_path($simulated_annotations),
   output_dir      => $flux_output_dir,
+  flux_parameters => \%flux_parameters,
 );
 
 # Finally we generate truth databases for this simulation
