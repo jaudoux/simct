@@ -57,6 +57,7 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 =head2 Sequencing
 
   --flux-par              Flux parameter file (prioritary over the following option)
+  --single-end            Single-end protocol
   --nb-molecules          Number of moleclules in the sample
   --nb-reads              Number of reads sequenced
   --reads-length          Length of sequenced reads
@@ -71,7 +72,7 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 =cut
 
 my ($help,$man,$verbose);
-my ($disable_error_encoding,$uniq_ids);
+my ($disable_error_encoding,$uniq_ids,$single_end);
 my ($genome_dir,$gtf_file,$flux_par,$vcf_file);
 my $sub_rate               = $CracTools::SimCT::Const::SUB_RATE;
 my $ins_rate               = $CracTools::SimCT::Const::INS_RATE;
@@ -112,6 +113,7 @@ GetOptions( "v|verbose"             => \$verbose,
             "vcf-ratio=f"           => \$vcf_ratio,
 
             # Flux parameters
+            "single-end"            => \$single_end,
             "nb-reads=i"            => \$flux_nb_reads,
             "reads-length=i"        => \$flux_reads_length,
             "fragment-length=i"     => \$flux_fragment_length,
@@ -226,7 +228,7 @@ my %flux_parameters = (
     TSS_MEAN          => 'NaN',
     READ_NUMBER       => $flux_nb_reads,
     READ_LENGTH       => $flux_reads_length,
-    PAIRED_END        => 'YES',
+    PAIRED_END        => $single_end? 'NO' : 'YES',
     NB_MOLECULES      => $flux_nb_molecules,
     FILTERING         => 'YES',
     SIZE_DISTRIBUTION => "N($flux_fragment_length,$flux_fragment_sd)",
