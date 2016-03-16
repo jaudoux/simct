@@ -1,0 +1,14 @@
+# Temp files
+\.swp$
+\.swn$
+\.swo$
+\.old$
+\.bak
+
+# Not distributed files
+^simulation
+^test-flux
+^TODO
+MANIFEST.SKIP
+
+# temprary skipped

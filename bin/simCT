@@ -311,13 +311,19 @@ while (my $bed_line = $bed_it->()) {
         getReadName(($i-1)/2,$alignments) : 
         getReadName(($i-1)/2,$alignments,\@sorted_uniq_errors);
       # Write both pairs to their respective file
-      CracTools::Utils::writeSeq($fastq1_output_fh,'fastq',$read_name,$paired_seq,$paired_qual);
-      CracTools::Utils::writeSeq($fastq2_output_fh,'fastq',$read_name,$read->{seq},$read->{qual});
+      CracTools::Utils::writeSeq($fastq1_output_fh,'fastq',$read_name."/1",$paired_seq,$paired_qual);
+      CracTools::Utils::writeSeq($fastq2_output_fh,'fastq',$read_name."/2",$read->{seq},$read->{qual});
     }
   } else {
     my $fh = ($i % 2 == 0) || !$is_paired_end? $fastq1_output_fh : $fastq2_output_fh;
+    my $read_id = $i;
+    if($is_paired_end) {
+      $read_id = ($i % 2 == 0)? ($i)/2 : ($i - 1)/2;
+    }
     CracTools::Utils::writeSeq($fh,'fastq',
-      $disable_error_encoding? getReadName($i,$alignments) : getReadName($i,$alignments,$errors_pos),
+      $disable_error_encoding? 
+        getReadName($read_id,$alignments) : 
+        getReadName($read_id,$alignments,$errors_pos),
       $read->{seq},
       $read->{qual}
     );
