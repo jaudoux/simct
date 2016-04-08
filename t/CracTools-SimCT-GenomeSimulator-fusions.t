@@ -118,20 +118,20 @@ $gtf_it->() for 1..5;
   is($fusion_exon_4->{end},49);
 
   my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,11,30);
-  print STDERR Dumper(\@alignments);
+  #print STDERR Dumper(\@alignments);
 }
 
 # Check the second fusion
 {
   my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,50,70);
-  print STDERR Dumper(\@alignments);
+  #print STDERR Dumper(\@alignments);
 }
 
 
 # Check the third fusion
 {
   my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,75,115);
-  print STDERR Dumper(\@alignments);
+  #print STDERR Dumper(\@alignments);
 }
 
 __CHR1_FASTA__
