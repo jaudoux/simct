@@ -40,7 +40,7 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 
 =head2 Input / Output
 
-  -o,--output-dir         Output directory (DEFAULT: 'simCT_simulation') 
+  -o,--output-dir         Output directory (DEFAULT: 'simCT_simulation')
   -g,--genome-dir         Reference genome directory (with chromosomes splited in individual FASTA files)
   -a,--annotations        Annotations file in GTF format
 
@@ -53,6 +53,15 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
   --vcf-file              A VCF file that contains mutations
   --vcf-ratio             Ratio of mutations that taken from the VCF source instead of random
                           (default: 0.8)
+
+=head2 Transcription simulation
+
+  --pre-mrna-rate         Rate a wich precursor RNAs are incorporated in the simulation.
+
+=head2 Post-transcription
+
+  --rna-editing-vcf       A VCF file that contains RNA-editing sites and a mutation frequence encoded
+                          in the AF field.
 
 =head2 Sequencing
 
@@ -73,7 +82,7 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 
 my ($help,$man,$verbose);
 my ($disable_error_encoding,$uniq_ids,$single_end);
-my ($genome_dir,$gtf_file,$flux_par,$vcf_file);
+my ($genome_dir,$gtf_file,$flux_par,$vcf_file,$rna_editing_vcf);
 my $sub_rate               = $CracTools::SimCT::Const::SUB_RATE;
 my $ins_rate               = $CracTools::SimCT::Const::INS_RATE;
 my $del_rate               = $CracTools::SimCT::Const::DEL_RATE;
@@ -111,6 +120,9 @@ GetOptions( "v|verbose"             => \$verbose,
             "f|nb-fusions=i"        => \$nb_fusions,
             "vcf-file=s"            => \$vcf_file,
             "vcf-ratio=f"           => \$vcf_ratio,
+
+            # Post-transcription parameters
+            "rna-editing-vcf"       => \$rna_editing_vcf,
 
             # Flux parameters
             "single-end"            => \$single_end,
@@ -250,6 +262,12 @@ my $flux_outputs = $flux_wrapper->generateSimulation(
   flux_parameters => \%flux_parameters,
 );
 
+# Load the rna-editing VCF (if one was supplied)
+my $post_transcription_mutations = CracTools::SimCT::MutationCollection->new();
+$post_transcription_mutations->loadVCF($rna_editing_vcf) if defined $rna_editing_vcf;
+my $post_transcription_mutations_query = CracTools::SimCT::MutationQuery->new();
+$post_transcription_mutations_query->addMutations($post_transcription_mutations->substitutions);
+
 # Finally we generate truth databases for this simulation
 print STDERR "Create truth databases\n";
 #my $rnaseq_ouput_dir  = File::Spec->catfile($output_dir,"rna_seq");
@@ -264,12 +282,12 @@ my $is_paired_end = $flux_outputs->{flux_parameters}->{PAIRED_END} eq 'YES'? 1 :
 
 # First we generates FASTQ sequences with read alignement
 # and errors position encoded in the read_name
-my $bed_it   = CracTools::Utils::bedFileIterator($flux_outputs->{sequencing_file}); 
+my $bed_it   = CracTools::Utils::bedFileIterator($flux_outputs->{sequencing_file});
 my $fastq_it = CracTools::Utils::seqFileIterator($flux_outputs->{fastq_file},'fastq');
 
 # Output is paired_end, we split files
-my $fastq1_output = $is_paired_end? 
-  File::Spec->catfile($rnaseq_ouput_dir,"reads_1.fastq.gz") : 
+my $fastq1_output = $is_paired_end?
+  File::Spec->catfile($rnaseq_ouput_dir,"reads_1.fastq.gz") :
   File::Spec->catfile($rnaseq_ouput_dir,"reads.fastq.gz");
 my $fastq2_output = $is_paired_end?
   File::Spec->catfile($rnaseq_ouput_dir,"reads_2.fastq.gz") : undef;
@@ -283,8 +301,12 @@ my $paired_alignments;
 my $paired_errors_pos;
 my $paired_seq;
 my $paired_qual;
+
+# Loop over bed alignements and FASTQ sequences
 while (my $bed_line = $bed_it->()) {
   my $read = $fastq_it->();
+
+  # Lift the alignement back to the reference genome
   my $alignments = getReadAlignments(
     $bed_line,
     $simulated_genome,
@@ -294,6 +316,26 @@ while (my $bed_line = $bed_it->()) {
     \%mutations,
     ($i % 2 == 0) && $is_paired_end? 1 : 0,
   );
+
+  # Handle Post-transcriptionnal substitutions
+  my $seq_pos = 0;
+  foreach my $alignment (@{$alignements}) {
+    my $overlapped_mutations = $post_transcription_mutations_query->fetchByRegion(
+      $alignment->chr,
+      $alignment->start,
+      $alignement->end,
+    );
+    foreach my $mut (@{$overlapped_mutations}) {
+      my $mut_pos = $seq_pos + $mut->pos - $alignement->start;
+      if($alignement->strand eq '+') {
+        $read->{seq}->[$mut_pos] = $mut->new_nuc;
+      } else {
+
+      }
+    }
+    $seq_pos += $alignement->end - $alignement->start + 1;
+  }
+
   my $errors_pos = CracTools::SimCT::FluxWrapper::getErrorsPos($read->{seq});
   $nb_errors += scalar @{$errors_pos};
   if($is_paired_end && $uniq_ids) {
@@ -309,8 +351,8 @@ while (my $bed_line = $bed_it->()) {
       unshift @{$alignments}, @{$paired_alignments};
       unshift @{$errors_pos}, @{$paired_errors_pos};
       my @sorted_uniq_errors = do { my %seen; grep { !$seen{$_}++ } sort @{$errors_pos}};
-      my $read_name = $disable_error_encoding? 
-        getReadName(($i-1)/2,$alignments) : 
+      my $read_name = $disable_error_encoding?
+        getReadName(($i-1)/2,$alignments) :
         getReadName(($i-1)/2,$alignments,\@sorted_uniq_errors);
       # Write both pairs to their respective file
       CracTools::Utils::writeSeq($fastq1_output_fh,'fastq',$read_name."/1",$paired_seq,$paired_qual);
@@ -323,8 +365,8 @@ while (my $bed_line = $bed_it->()) {
       $read_id = ($i % 2 == 0)? ($i)/2 : ($i - 1)/2;
     }
     CracTools::Utils::writeSeq($fh,'fastq',
-      $disable_error_encoding? 
-        getReadName($read_id,$alignments) : 
+      $disable_error_encoding?
+        getReadName($read_id,$alignments) :
         getReadName($read_id,$alignments,$errors_pos),
       $read->{seq},
       $read->{qual}
@@ -335,10 +377,10 @@ while (my $bed_line = $bed_it->()) {
 my $nb_reads = $i;
 
 # Print gene_counts and transcript_counts files
-my $transcript_counts_output = File::Spec->catfile($rnaseq_ouput_dir,"transcript-counts.tsv.gz"); 
-my $transcript_counts_fh     = CracTools::Utils::getWritingFileHandle($transcript_counts_output); 
-my $gene_counts_output       = File::Spec->catfile($rnaseq_ouput_dir,"gene-counts.tsv.gz"); 
-my $gene_counts_fh           = CracTools::Utils::getWritingFileHandle($gene_counts_output); 
+my $transcript_counts_output = File::Spec->catfile($rnaseq_ouput_dir,"transcript-counts.tsv.gz");
+my $transcript_counts_fh     = CracTools::Utils::getWritingFileHandle($transcript_counts_output);
+my $gene_counts_output       = File::Spec->catfile($rnaseq_ouput_dir,"gene-counts.tsv.gz");
+my $gene_counts_fh           = CracTools::Utils::getWritingFileHandle($gene_counts_output);
 my $flux_profile_fh          = CracTools::Utils::getReadingFileHandle($flux_outputs->{profile_file});
 # 1. Create a transcript_id => gene conversion hash
 my %conversion_hash;
@@ -368,7 +410,7 @@ foreach my $gene (keys %gene_counts) {
 # Print Splices
 # TODO sort splices by pos
 if(keys %splices) {
-  my $splices_output = File::Spec->catfile($rnaseq_ouput_dir,"splices.bed.gz"); 
+  my $splices_output = File::Spec->catfile($rnaseq_ouput_dir,"splices.bed.gz");
   my $splices_fh     = CracTools::Utils::getWritingFileHandle($splices_output);
 # TODO Sort splices by start position
   foreach my $splice (keys %splices) {
@@ -388,7 +430,7 @@ if(keys %splices) {
 # Print Chimeras
 # TODO sort chimeras by pos
 if(keys %chimeras) {
-  my $chimeras_output = File::Spec->catfile($rnaseq_ouput_dir,"chimeras.tsv.gz"); 
+  my $chimeras_output = File::Spec->catfile($rnaseq_ouput_dir,"chimeras.tsv.gz");
   my $chimeras_fh     = CracTools::Utils::getWritingFileHandle($chimeras_output);
 # TODO Sort chimeras by start position
   foreach my $chimera (keys %chimeras) {
@@ -403,7 +445,7 @@ if(keys %chimeras) {
 
 # TODO Print Mutations
 if(keys %mutations) {
-  my $mutations_output = File::Spec->catfile($rnaseq_ouput_dir,"mutations.vcf.gz"); 
+  my $mutations_output = File::Spec->catfile($rnaseq_ouput_dir,"mutations.vcf.gz");
   my $mutations_fh     = CracTools::Utils::getWritingFileHandle($mutations_output);
   foreach my $mut (sort { $a->pos <=> $b->pos } keys %mutations) {
     # Get raw VCF record
@@ -415,8 +457,8 @@ if(keys %mutations) {
   }
 }
 
-my $info_file   = File::Spec->catfile($rnaseq_ouput_dir,"info.txt"); 
-my $info_output = CracTools::Output->new(file => $info_file); 
+my $info_file   = File::Spec->catfile($rnaseq_ouput_dir,"info.txt");
+my $info_output = CracTools::Output->new(file => $info_file);
 $info_output->printHeaders(
   version => $CracTools::SimCT::VERSION,
   args    => \@ARGV_copy,
@@ -472,8 +514,8 @@ sub getReadAlignments {
   # Browse the alignments for splices and chimeras
   my $prev_alignment;
   foreach my $alignment (@alignments) {
-    my $real_strand = $reversed? 
-      CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) : 
+    my $real_strand = $reversed?
+      CracTools::SimCT::Utils::reverseStrand($alignment->{strand}) :
       $alignment->{strand};
     my @cigar = @{CracTools::Utils::parseCigarChain($alignment->{cigar})};
     my $start = $alignment->{start};
@@ -501,14 +543,15 @@ sub getReadAlignments {
     if(defined $prev_alignment) {
       my $chim_key = join("@",
         $prev_alignment->{chr},
-        $prev_alignment->{reverse}? 
-          $prev_alignment->{start} : $prev_alignment->{end},
-        $reversed? 
-          CracTools::SimCT::Utils::reverseStrand($prev_alignment->{strand}) : 
-          $prev_alignment->{strand},
-        $alignment->{chr},
-        $alignment->{reverse}? 
-          $alignment->{end} : $alignment->{start},
+        $prev_alignment->reverse?
+          $prev_alignment->start : $prev_alignment->end,
+        $reversed?
+          # TODO addapt reverseStrand with '+' '-' strands
+          CracTools::SimCT::Utils::reverseStrand($prev_alignment->strand) :
+          $prev_alignment->strand,
+        $alignment->chr,
+        $alignment->reverse?
+          $alignment->end : $alignment->start,
         $real_strand,
       );
       push @{$chimeras->{$chim_key}},$read_id;
@@ -520,23 +563,23 @@ sub getReadAlignments {
 
 
 
-# Give 
+# Give
 sub getReadName {
   my ($read_id,$alignments,$errors_pos) = @_;
   my $read_name = join(":",
     $read_id,
     join(";",
-      map { 
+      map {
         join(",",
-          $_->{chr},
-          $_->{start},
-          $_->{strand},
-          $_->{cigar},
+          $_->chr,
+          $_->start,
+          $_->strand,
+          $_->cigar,
         )
       } @{$alignments},
     ),
   );
-  # Encode position list in base 64 
+  # Encode position list in base 64
   if(@{$errors_pos}) {
     $read_name = join(":",$read_name,CracTools::Utils::encodePosListToBase64(@{$errors_pos}));
   }
@@ -544,4 +587,3 @@ sub getReadName {
   $read_name = substr $read_name, 0, 255 if length $read_name > 255;
   return $read_name;
 }
-

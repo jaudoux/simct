@@ -78,12 +78,12 @@ sub getFusionGene($$$) {
     foreach my $exon (@exons) {
       my $exon_start;
       if(refaddr($fused_exon) == refaddr($self->fused_exon_5prim)) {
-        $exon_start = $exon->strand eq '+'? 
-                       $chr_fusion_pos + ($exon->start - $exon->gene->start) : 
+        $exon_start = $exon->strand eq '+'?
+                       $chr_fusion_pos + ($exon->start - $exon->gene->start) :
                        $chr_fusion_pos + ($exon->gene->end - $exon->end);
       } else {
-        $exon_start = $exon->strand eq '+'? 
-                       $chr_fusion_pos + ($exon->start - $fused_exon->exon->start) : 
+        $exon_start = $exon->strand eq '+'?
+                       $chr_fusion_pos + ($exon->start - $fused_exon->exon->start) :
                        $chr_fusion_pos + ($fused_exon->exon->end - $exon->end);
       }
       push @fusion_exons, CracTools::SimCT::Annotations::Exon->new(
@@ -98,7 +98,8 @@ sub getFusionGene($$$) {
   return $fusion_gene;
 }
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -106,7 +107,7 @@ __END__
 
 A fusion is a chimeric gene formed by fusing the exons of two genes (not
 necessarly different). One of the implicated exon is said 5prim and the other 3prim.
-The new fused gene will be formed by fusing the upstream exon's of the 5prim gene 
+The new fused gene will be formed by fusing the upstream exon's of the 5prim gene
 and the downstream exons of the 3prim gene. The two fused exons will be merge
 into a new exon.
 
@@ -144,7 +145,7 @@ Return true if the fusion sequence is completely defined (ie. both 5prim and
 =head2 getFusionGene => 'CracTools::SimCT::Annotations::Gene'
 
   Arg [1] : 'Str' - Fusion id used to name the fusion gene
-  Arg [2] : 'Str' - Chromosome name 
+  Arg [2] : 'Str' - Chromosome name
   Arg [3] : 'Int' - Chromosome position where the fusion start
 
 Return a new 'CracTools::SimCT::Annotations::Gene' object that correspond

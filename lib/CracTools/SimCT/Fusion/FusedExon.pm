@@ -53,7 +53,6 @@ package CracTools::SimCT::Fusion::FusedExon::5prim;
 use Moose;
 use Scalar::Util 'refaddr';
 
-
 with 'CracTools::SimCT::Fusion::FusedExon';
 
 sub setFusedSequence {
@@ -77,20 +76,20 @@ sub allFusedExons {
     my @exons = $self->gene->sortedExons;
     foreach my $exon (@exons) {
       if(refaddr($exon) == refaddr($self->exon)) {
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
         last;
       } elsif($exon->end < $self->exon->end) {
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
       }
     }
   } else {
     my @exons = sort { $b->end <=> $a->end } $self->gene->allExons;
     foreach my $exon (@exons) {
       if(refaddr($exon) == refaddr($self->exon)) {
-        push @fused_exons, $exon; 
-        last; 
+        push @fused_exons, $exon;
+        last;
       } elsif($exon->start > $self->exon->start) {
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
       }
     }
   }
@@ -136,9 +135,9 @@ sub allFusedExons {
     foreach my $exon (@exons) {
       if(refaddr($exon) == refaddr($self->exon)) {
         @fused_exons = ();
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
       } elsif($exon->start > $self->exon->start) {
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
       }
     }
   } else {
@@ -146,9 +145,9 @@ sub allFusedExons {
     foreach my $exon (@exons) {
       if(refaddr($exon) == refaddr($self->exon)) {
         @fused_exons = ();
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
       } elsif($exon->end < $self->exon->end) {
-        push @fused_exons, $exon; 
+        push @fused_exons, $exon;
       }
     }
   }
@@ -165,7 +164,7 @@ sub getFusionOffset {
   }
 }
 
-1;
+no Moose;
 
 __END__
 
@@ -243,4 +242,3 @@ a 'pop').
 In the case of the 'CracTools::SimCT::Fusion::FusedExon::3prim' implementation,
 the fused exon, is stored in the first position of the array (ie. accessible with
 a 'shift').
-

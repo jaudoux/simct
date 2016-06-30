@@ -107,25 +107,21 @@ sub appendGTF {
     #my %transcripts_gtf_lines = ();
     #my @sorted_transcript = ();
     foreach my $exon ($gene->sortedExons) {
-      my ($chr,$start,$end,$strand) = ($exon->chr,$exon->start,$exon->end,$exon->strand);
+      my $exon_coords = $exon;
       # If we have a liftover object, we shift the exon's coordinates
       if(defined $liftover) {
-        my $shifted_exon = $liftover->shiftAnnotation($chr,$start,$end,$strand);
+        $exon_coords = $liftover->shiftAnnotation($exon);
         # If this exon does not exists in the new
         # genome we move to the next exon
-        next if !defined $shifted_exon;
-        $chr    = $shifted_exon->{chr};
-        $start  = $shifted_exon->{start};
-        $end    = $shifted_exon->{end};
-        $strand = $shifted_exon->{strand};
+        next if !defined $exon_coords;
       }
       foreach my $transcript_id ($exon->allTranscripts) {
         my $gtf_line = {
-          chr         => $chr,
+          chr         => $exon_coords->chr,
           feature     => 'exon',
-          start       => $start + 1,
-          end         => $end + 1,
-          strand      => $strand,
+          start       => $exon_coords->start + 1,
+          end         => $exon_coords->end + 1,
+          strand      => $exon_coords->strand,
           attributes  => {
             'gene_id'       => $gene->id,
             'transcript_id' => $transcript_id,
@@ -148,7 +144,8 @@ sub appendGTF {
   map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } @gtf_buffer;
 }
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 

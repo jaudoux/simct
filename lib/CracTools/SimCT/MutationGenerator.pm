@@ -1,4 +1,4 @@
-package CracTools::SimCT::MutationGenerator;  
+package CracTools::SimCT::MutationGenerator;
 # ABSTRACT: The mother class of mutation generators
 
 use Moose::Role;
@@ -13,4 +13,6 @@ has 'genome_simulator' => (
 
 requires 'generateMutations';
 
+no Moose;
 1;
+#__PACKAGE__->meta->make_immutable;

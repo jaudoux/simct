@@ -3,18 +3,21 @@ package CracTools::SimCT::Mutation;
 
 #use Moose::Role;
 use Moose;
+
+extends 'CracTools::SimCT::GenomicInterval';
+
 use CracTools::SimCT::Utils;
 
-has 'chr' => (
-  is        => 'ro',
-  isa       => 'Str',
-  required  => 1,
-);
-
-has 'pos' => (
-  is        => 'ro',
-  isa       => 'Int',
-  required  => 1,
+has '+end' => (
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    if($self->referenceLength == 0) {
+      return $self->start;
+    } else {
+      return $self->start + $self->referenceLength - 1;
+    }
+  },
 );
 
 has 'reference_sequence' => (
@@ -30,6 +33,12 @@ has 'reference_sequence' => (
   },
 );
 
+has 'frequency' => (
+  is        => 'rw',
+  isa       => 'Num',
+  default   => 1,
+);
+
 sub mutation_sequence {
   #my $self = shift;
   return "";
@@ -37,19 +46,6 @@ sub mutation_sequence {
 
 sub referenceLength {
   return 0;
-}
-
-#requires 'referenceLength';
-
-#requires 'mutation_sequence';
-
-sub end {
-  my $self = shift;
-  if($self->referenceLength == 0) {
-    return $self->pos;
-  } else {
-    return $self->pos + $self->referenceLength - 1;
-  }
 }
 
 sub mutationLength {
@@ -69,9 +65,10 @@ sub getVCFRecord {
   my $self = shift;
   my %vcf_record = (
     chr => $self->chr,
-    pos => $self->pos,
+    pos => $self->start,
     ref => $self->reference_sequence,
     alt => $self->mutation_sequence,
+    id  => '.',
   );
   if($self->referenceLength == 0 || $self->mutationLength == 0) {
     $vcf_record{pos}--;
@@ -83,7 +80,8 @@ sub getVCFRecord {
 
 #with ('CracTools::SimCT::GeneticVariant');
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -95,7 +93,7 @@ __END__
 
 The chromosome where the mutation occurs
 
-=head2 pos
+=head2 start
 
 The position of the mutation on the reference genome
 

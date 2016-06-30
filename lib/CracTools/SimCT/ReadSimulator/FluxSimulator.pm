@@ -1,49 +1,35 @@
-package CracTools::SimCT::FluxWrapper;
-# ABSTRACT: Wrapper around FluxSimulator binary tool
+package CracTools::SimCT::ReadSimulator::FluxSimulator;
+# ABSTRACT: Base class for read simulators
 
-use strict;
-use warnings;
+use Moose;
 
 use Carp;
 use File::Spec;
 use CracTools::Utils;
 use CracTools::SimCT::Const;
+use CracTools::SimCT::ReadSimulation::FluxSimulator;
 
-sub new {
-  my $class = shift;
-  my %args = @_;
+with 'CracTools::SimCT::ReadSimulator';
 
-  my $flux_binary = $args{flux_binary};
-  $flux_binary = $CracTools::SimCT::Const::FLUX_BINARY unless defined $flux_binary;
+has '+simulator_name' => (
+  default => 'FluxSimulator',
+);
 
-  my $self = bless {
-    flux_binary => $flux_binary,
-  }, $class;
+has 'flux_binary' => (
+  is => 'rw',
+  isa => 'Str',
+  default => $CracTools::SimCT::Const::FLUX_BINARY,
+);
 
-  #$self->_init();
-
-  return $self;
-
-}
-
-#sub _init {
-#
-#}
-
-sub fluxBinary {
-  my $self = shift;
-  return $self->{flux_binary};
-}
-
-# Given a genome and an annotation file object, generate a set of read files and other available files :
-sub generateSimulation {
+sub _generateSimulation {
   my $self            = shift;
   my %args            = @_;
 
-  my $genome_dir      = $args{genome_dir};
-  my $annotation_file = $args{annotation_file};
-  my $output_dir      = $args{output_dir};
-  my $flux_parameters = $args{flux_parameters};
+  my $simulated_genome = $args{simulated_genome};
+  my $output_dir       = $args{simulation_dir};
+  my $genome_dir       = $args{genome_dir};
+  my $annotation_file  = $args{annotation_file};
+  my $flux_parameters  = $args{flux_parameters};
 
   $flux_parameters = {} unless defined $flux_parameters;
 
@@ -55,7 +41,6 @@ sub generateSimulation {
   $flux_parameters->{ERR_FILE}    = 76 unless defined $flux_parameters->{ERR_FILE}; # Force sequence output
   $flux_parameters->{UNIQUE_IDS}  = 'YES' if defined $flux_parameters->{PAIRED_END} && $flux_parameters->{PAIRED_END} eq 'YES';
 
-  
   my $flux_output_name  = $CracTools::SimCT::Const::FLUX_OUTPUT_BASENAME;
   my $parameter_file    = File::Spec->catfile($output_dir,"$flux_output_name.par");
   my $fastq_file        = File::Spec->catfile($output_dir,"$flux_output_name.fastq");
@@ -74,29 +59,20 @@ sub generateSimulation {
 
   # Remove sorted annotation that may exists
   unlink File::Spec->catfile($output_dir,"annotations_sorted.gtf");
-  
+
   # Then run flux
-  my $command = $self->fluxBinary." -p $parameter_file --force -x -l -s";
+  my $command = $self->flux_binary." -p $parameter_file --force -x -l -s";
   system($command);
 
-  return {
+  return CracTools::SimCT::ReadSimulation::FluxSimulator->new(
     flux_parameters => $flux_parameters,
     profile_file    => $profile_file,
     parameter_file  => $parameter_file,
     library_file    => $library_file,
     sequencing_file => $sequencing_file,
     fastq_file      => $fastq_file,
-    #error_file      => $error_file,
-  }
+  );
 }
 
-sub getErrorsPos($) {
-  my $seq = shift;
-  my @pos;
-  while ($seq =~ /[atgc]/g) {
-    push @pos,$-[0];
-  }
-  return \@pos;
-}
-
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;

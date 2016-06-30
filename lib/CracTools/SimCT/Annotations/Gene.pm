@@ -4,6 +4,8 @@ package CracTools::SimCT::Annotations::Gene;
 use Moose;
 use Moose::Util::TypeConstraints;
 
+extends 'CracTools::SimCT::GenomicInterval';
+
 use CracTools::SimCT::Utils;
 use CracTools::SimCT::Annotations::Exon;
 
@@ -19,9 +21,36 @@ has exons_hash => (
   },
 );
 
-has chr     => (is => 'ro', isa => 'Str',     required => 1);
-has strand  => (is => 'ro', isa => 'Strand',  required => 1);
-has id      => (is => 'ro', isa => 'Str',     required => 1);
+has id  => (is => 'ro', isa => 'Str',     required => 1);
+
+# Compute start on the fly
+has '+start' => (
+  lazy  => 1,
+  default => sub {
+    my $self = shift;
+    my $start = undef;
+    foreach my $exon ($self->allExons) {
+      if(!defined $start || $exon->start < $start) {
+        $start = $exon->start;
+      }
+    }
+    return $start;
+  },
+);
+
+has '+end' => (
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    my $end = undef;
+    foreach my $exon ($self->allExons) {
+      if(!defined $end || $exon->end > $end) {
+        $end = $exon->end;
+      }
+    }
+    return $end;
+  },
+);
 
 sub addExon {
   my $self = shift;
@@ -46,37 +75,14 @@ sub sortedExons {
   return sort { $a->start <=> $b->start } $self->allExons;
 }
 
-# Compute start on the fly
-sub start {
-  my $self = shift;
-  my $start = undef;
-  foreach my $exon ($self->allExons) {
-    if(!defined $start || $exon->start < $start) {
-      $start = $exon->start;
-    }
-  }
-  return $start;
-}
-
-sub end {
-  my $self = shift;
-  my $end = undef;
-  foreach my $exon ($self->allExons) {
-    if(!defined $end || $exon->end > $end) {
-      $end = $exon->end;
-    }
-  }
-  return $end;
-}
 
 sub _getExonKey {
   my $exon = shift;
   return $exon->start.",".$exon->end;
 }
 
+no Moose;
 __PACKAGE__->meta->make_immutable;
-
-1;
 
 __END__
 

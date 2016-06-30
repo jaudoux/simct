@@ -12,7 +12,8 @@ has references_length => (
   isa => 'HashRef[Int]',
   default => sub { {} },
   handles => {
-    getReferenceLength => 'get',
+    getReferenceLength  => 'get',
+    allReferencesLength => 'values'
   },
 );
 
@@ -20,7 +21,7 @@ has reference_sequence_files => (
   traits => ['Hash'],
   is => 'ro',
   isa => 'HashRef[Str]',
-  required => 1, 
+  required => 1,
   trigger => sub {
     my $self = shift;
     foreach my $reference ($self->references) {
@@ -35,6 +36,13 @@ has reference_sequence_files => (
   },
 );
 
+sub genomeLength {
+  my $self = shift;
+  my $genome_length = 0;
+  map { $genome_length += $_ } $self->allReferencesLength;
+  return $genome_length;
+}
+
 sub sortedReferences {
   my $self = shift;
   return sort { $a cmp $b } $self->references;
@@ -47,7 +55,8 @@ sub getReferenceSeq($) {
   return $fasta_input_it->()->{seq}; # This load the entire FASTA entry into memory
 }
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 

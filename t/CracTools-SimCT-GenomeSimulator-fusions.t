@@ -8,10 +8,21 @@ use CracTools::SimCT::Fusion;
 use CracTools::SimCT::Fusion::FusedExon;
 use CracTools::SimCT::Annotations;
 use CracTools::SimCT::GenomeSimulator;
+use CracTools::SimCT::GenomicInterval;
 use CracTools::Utils;
 use Data::Dumper;
 use Inline::Files 0.68;
 use File::Temp;
+
+sub newInterval {
+  my ($chr,$start,$end,$strand) = @_;
+  return CracTools::SimCT::GenomicInterval->new(
+    chr   => $chr,
+    start => $start,
+    end   => $end,
+    strand => defined $strand? $strand : '+',
+  );
+}
 
 # Load the fasta file
 my $chr1_fasta_file = new File::Temp( SUFFIX => '.fa', UNLINK => 1);
@@ -117,20 +128,20 @@ $gtf_it->() for 1..5;
   is($fusion_exon_4->{start},39);
   is($fusion_exon_4->{end},49);
 
-  my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,11,30);
+  my @alignments      = $sg->liftover->getAlignments(newInterval($CracTools::SimCT::Const::CHR_FUSIONS,11,30));
   #print STDERR Dumper(\@alignments);
 }
 
 # Check the second fusion
 {
-  my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,50,70);
+  my @alignments      = $sg->liftover->getAlignments(newInterval($CracTools::SimCT::Const::CHR_FUSIONS,50,70));
   #print STDERR Dumper(\@alignments);
 }
 
 
 # Check the third fusion
 {
-  my @alignments      = $sg->liftover->getAlignments($CracTools::SimCT::Const::CHR_FUSIONS,75,115);
+  my @alignments      = $sg->liftover->getAlignments(newInterval($CracTools::SimCT::Const::CHR_FUSIONS,75,115));
   #print STDERR Dumper(\@alignments);
 }
 

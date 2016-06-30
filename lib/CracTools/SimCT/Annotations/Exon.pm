@@ -3,6 +3,8 @@ package CracTools::SimCT::Annotations::Exon;
 
 use Moose;
 
+extends 'CracTools::SimCT::GenomicInterval';
+
 use CracTools::SimCT::Annotations::Gene;
 
 has gene  => (
@@ -15,17 +17,21 @@ has gene  => (
   }
 );
 
-has start => (is => 'rw', isa => 'Int', required => 1);
-
-has end   => (is => 'rw', 
-  isa       => 'Int',
-  required  => 1,
-  # Verify that 'end' is greater than start
-  trigger   => sub {
+# Use gene value for chr
+has '+chr' => (
+  lazy    => 1,
+  default => sub {
     my $self = shift;
-    if($self->end < $self->start) {
-      die "End position (".$self->end.") must be greater (or equal) to start (".$self->start.")";
-    }
+    return $self->gene->chr;
+  },
+);
+
+# Use gene value for strand
+has '+strand' => (
+  lazy    => 1,
+  default => sub {
+    my $self = shift;
+    return $self->gene->strand;
   },
 );
 
@@ -40,34 +46,16 @@ has transcripts => (
   },
 );
 
-# Use gene value for chr
-sub chr {
-  my $self = shift;
-  return $self->gene->chr;
-}
-
-# Use gene value for strand
-sub strand {
-  my $self = shift;
-  return $self->gene->strand;
-}
-
-sub length {
-  my $self = shift;
-  return $self->end - $self->start + 1;
-}
-
 # Remove a transcript given its id
 sub removeTranscript($) {
   my $self = shift;
   my $transcript  = shift;
   my @transcripts = grep { $_ ne $transcript } @{$self->transcripts};
-  $self->transcripts(\@transcripts); 
+  $self->transcripts(\@transcripts);
 }
 
+no Moose;
 __PACKAGE__->meta->make_immutable;
-
-1;
 
 __END__
 

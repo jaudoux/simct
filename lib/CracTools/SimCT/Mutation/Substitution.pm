@@ -23,12 +23,8 @@ has new_nuc => (
   required => 1,
 );
 
-#has old_nuc => (
-#  is  => 'ro',
-#  isa => 'DNAnuc',
-#);
-
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -37,7 +33,7 @@ __END__
 =head2 new
 
   Arg [chr]     : 'Str'   - substitution's chromosome
-  Arg [pos]     : 'Int'   - substitution's strand
+  Arg [start]     : 'Int'   - substitution's strand
   Arg [new_nuc] : 'Str'   - substitution nucleotide
 
 Create a new 'CracTools::SimCT::Mutation::Substitution'

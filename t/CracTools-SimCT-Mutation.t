@@ -12,12 +12,12 @@ my $chr_seq = "AGGCTGATCAGTCGATCAGTCAGTCAGCATCGAT";
 {
   my $ins = CracTools::SimCT::Mutation::Insertion->new(
     chr => "1",
-    pos => 10,
+    start => 10,
     inserted_sequence => "TATA",
   );
 
   is($ins->chr,"1");
-  is($ins->pos,10);
+  is($ins->start,10);
   is($ins->mutation_sequence,"TATA");
   is($ins->mutationLength,4);
   is($ins->referenceLength,0);
@@ -28,7 +28,7 @@ my $chr_seq = "AGGCTGATCAGTCGATCAGTCAGTCAGCATCGAT";
 {
   my $del = CracTools::SimCT::Mutation::Deletion->new(
     chr => "1",
-    pos => 10,
+    start => 10,
     length => 2,
   );
   is($del->mutation_sequence,"");
@@ -43,7 +43,7 @@ my $chr_seq = "AGGCTGATCAGTCGATCAGTCAGTCAGCATCGAT";
 {
   my $sub = CracTools::SimCT::Mutation::Substitution->new(
     chr => "1",
-    pos => 10,
+    start => 10,
     new_nuc => 'C',
   );
   is($sub->mutation_sequence,'C');

@@ -66,9 +66,9 @@ sub addMutation($) {
     carp "Mutation chromosome is not available in the reference genome";
   } elsif ($mut->end >= $self->genome->getReferenceLength($mut->chr)) {
     carp "Mutation is outside the scope of the reference";
-  } elsif($self->genome_mask->getNbBitsSetInRegion($mut->chr,$mut->pos,$mut->end+1) == 0) {
+  } elsif($self->genome_mask->getNbBitsSetInRegion($mut->chr,$mut->start,$mut->end+1) == 0) {
     push @{$self->mutations}, $mut;
-    $self->genome_mask->setRegion($mut->chr,$mut->pos,$mut->end+1);
+    $self->genome_mask->setRegion($mut->chr,$mut->start,$mut->end+1);
     return 1;
   }
   return 0;
@@ -78,16 +78,16 @@ sub sortedMutations {
   my $self = shift;
   my $chr  = shift;
   if(defined $chr) {
-    return sort {$a->pos <=> $b->pos} grep {$_->chr eq $chr} $self->allMutations;
+    return sort {$a->start <=> $b->start} grep {$_->chr eq $chr} $self->allMutations;
   } else {
-    return sort {$a->chr cmp $b->chr && $a->pos <=> $b->pos} $self->allMutations;
+    return sort {$a->chr cmp $b->chr && $a->start <=> $b->start} $self->allMutations;
   }
 }
 
 sub generateGenome {
   my $self = shift;
   my %args = @_;
-  
+
   my $annotations = $args{annotations};
   my $genome_dir  = $args{genome_dir};
 
@@ -95,14 +95,14 @@ sub generateGenome {
   my $gtf_output_fh   = CracTools::Utils::getWritingFileHandle($gtf_file);
 
   my $annot_lifter = CracTools::SimCT::LiftOver->new();
-  
+
   # We generate the simulated genome for each chr
   foreach my $chr ($self->genome->sortedReferences) {
     my $fasta_output    = File::Spec->catfile($genome_dir,"$chr.fa");
     my $fasta_output_fh = CracTools::Utils::getWritingFileHandle($fasta_output);
     my $chr_seq         = $self->genome->getReferenceSeq($chr);
     my $chr_length      = $self->genome->getReferenceLength($chr);
-  
+
     # We update the fusion genes that involves this chromosome and
     # store the corresponding sequences
     foreach my $fusion ($self->allFusions) {
@@ -125,11 +125,11 @@ sub generateGenome {
 
       # Add the interval between the previous mutation and the current one
       # to the liftover
-      $annot_lifter->addInterval($chr,$index,$mut->pos-1,$offset);
+      $annot_lifter->addInterval($chr,$index,$mut->start-1,$offset);
 
       # We read the sequence before the mutation and print it in
       # the output fasta
-      my $frag    = substr $chr_seq, 0, $mut->pos-$index, "";
+      my $frag    = substr $chr_seq, 0, $mut->start-$index, "";
       $remainder  = CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$frag,$remainder);
 
       # Give the a reference to the chr sequence for the mutation
@@ -147,7 +147,7 @@ sub generateGenome {
 
       # Update the offset and the index
       $offset += ($mut->mutationLength - $mut->referenceLength);
-      $index  = $mut->pos + $mut->referenceLength;
+      $index  = $mut->start + $mut->referenceLength;
     }
 
     # Now we print what's left of the reference
@@ -182,7 +182,7 @@ sub generateGenome {
 
   my $remainder       = 0;
   my $fusion_id       = 0;
-  my $chr_fusion_pos  = 0;
+  my $chr_fusion_start  = 0;
 
   # Create a new annotation set for fusions
   my $fusion_annotations = CracTools::SimCT::Annotations->new();
@@ -195,12 +195,12 @@ sub generateGenome {
     my $fusion_gene = $fusion->getFusionGene(
       "fusion_".$fusion_id,
       $CracTools::SimCT::Const::CHR_FUSIONS,
-      $chr_fusion_pos,
+      $chr_fusion_start,
     );
     $fusion_annotations->addGene($fusion_gene);
 
-    # Update the fusion pos for the next fusion
-    $chr_fusion_pos += length $fusion->fusion_sequence;
+    # Update the fusion start for the next fusion
+    $chr_fusion_start += length $fusion->fusion_sequence;
     $fusion_id++;
 
   }
@@ -211,15 +211,16 @@ sub generateGenome {
   # Close outputs
   close($fasta_output_fh);
   close($gtf_output_fh);
-  
+
   # Return the simulated genome build on the base
   # of the current state of GS
-  return CracTools::SimCT::SimulatedGenome->new(
+  return ($gtf_file, CracTools::SimCT::SimulatedGenome->new(
     genome_simulator => $self,
-  );
+  ));
 }
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -281,7 +282,7 @@ Add a fusion
   Arg [genome_dir]   : 'Path' - the directory where the simulated genome will be
                         saved.
   Arg [annotations]  : 'CracTools::SimCT::Annotations' - A set of annotations
-                        over the reference genome that will be liftover the 
+                        over the reference genome that will be liftover the
                         simulated genome and print into
                         "genome_dir/annotations.gtf"
 

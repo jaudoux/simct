@@ -6,6 +6,10 @@ use Moose;
 use List::Util qw(min max);
 use CracTools::Interval::Query;
 use CracTools::SimCT::Const;
+use CracTools::SimCT::GenomicInterval;
+use CracTools::SimCT::LiftOver::ShiftedInterval;
+use CracTools::SimCT::Alignment;
+use CracTools::SimCT::Alignment::CigarElement;
 use Data::Dumper;
 
 has 'interval_query' => (
@@ -31,15 +35,16 @@ sub addInterval {
 }
 
 sub shiftInterval {
-  my ($self,$chr,$start,$end,$strand) = @_;
-
-  # By default, the strand is positive
-  $strand = '+' unless defined $strand;
+  my ($self,$interval) = @_;
 
   my @shifted_intervals;
 
   # Retrieve intervals from the interval query
-  my ($intervals,$offsets) = $self->interval_query->fetchByRegion($chr,$start,$end);
+  my ($intervals,$offsets) = $self->interval_query->fetchByRegion(
+    $interval->chr,
+    $interval->start,
+    $interval->end
+  );
 
   # Now we sort the intervals indexes
   my @sorted_intervals = sort { $intervals->[$a]->{start} <=> $intervals->[$b]->{start} } (0..@{$intervals}-1);
@@ -49,11 +54,11 @@ sub shiftInterval {
     my $offset      = $offsets->[$i]->{offset};
     my $chr_dest    = $offsets->[$i]->{chr};
     my $reverse     = $offsets->[$i]->{reverse};
-    my $new_strand  = $strand;
+    my $new_strand  = $interval->strand;
 
     # Set ref positions
-    $ref_start     = max($intervals->[$i]->{start}, $start);
-    $ref_end       = min($intervals->[$i]->{end}, $end);
+    $ref_start     = max($intervals->[$i]->{start}, $interval->start);
+    $ref_end       = min($intervals->[$i]->{end}, $interval->end);
 
     # If we have an offset, we simply shift coordinates
     if(!$reverse) {
@@ -67,16 +72,18 @@ sub shiftInterval {
       $new_strand    = $new_strand eq '+' ? '-' : '+';
     }
 
-    my $new_interval = {
+    my $new_interval = CracTools::SimCT::LiftOver::ShiftedInterval->new(
+      chr     => $chr_dest,
       start   => $shifted_start,
       end     => $shifted_end,
-      ref_start => $ref_start,
-      ref_end   => $ref_end,
-      ref_length => $ref_end - $ref_start + 1,
-      chr     => $chr_dest,
       strand  => $new_strand,
-      reverse => $reverse,
-    };
+      reference_interval => CracTools::SimCT::GenomicInterval->new(
+        chr     => $interval->chr,
+        start   => $ref_start,
+        end     => $ref_end,
+        strand  => $interval->strand,
+      ),
+    );
 
     push @shifted_intervals, $new_interval;
   }
@@ -88,66 +95,103 @@ sub shiftAnnotation {
   my $self = shift;
   my @shifted_intervals = @{$self->shiftInterval(@_)};
   if(@shifted_intervals > 0) {
-    if($shifted_intervals[0]->{chr} ne $shifted_intervals[-1]->{chr}) {
+    if($shifted_intervals[0]->chr ne $shifted_intervals[-1]->chr) {
       die "Cannot shift annotation overlapping two different chromosomes";
-    } 
-    if($shifted_intervals[0]->{strand} ne $shifted_intervals[-1]->{strand}) {
+    }
+    if($shifted_intervals[0]->strand ne $shifted_intervals[-1]->strand) {
       die "Cannot shift annotation overlapping two different strand";
     }
-    return {
-      chr     => $shifted_intervals[0]->{chr},
-      start   => $shifted_intervals[0]->{start},
-      end     => $shifted_intervals[-1]->{end},
-      strand  => $shifted_intervals[0]->{strand}
-    };
+    return CracTools::SimCT::GenomicInterval->new(
+      chr     => $shifted_intervals[0]->chr,
+      start   => $shifted_intervals[0]->start,
+      end     => $shifted_intervals[-1]->end,
+      strand  => $shifted_intervals[0]->strand
+    );
   } else {
     return undef;
   }
 }
 
-# Given a genomic interval over the simulated genome, 
+# Given a genomic interval over the simulated genome,
 # returns a set of alignments {start, end, strand, cigar} over the
 # reference genome
 sub getAlignments {
   my $self = shift;
-  my @shifted_intervals = @{$self->shiftInterval(@_)};
-  
+  my $original_interval = shift;
+
+  my @shifted_intervals = @{$self->shiftInterval($original_interval)};
+
   # If there is no shifted intervals, we return an empty array
   return () if !@shifted_intervals;
 
-  my $current_interval = shift @shifted_intervals;
-  my $match_length = $current_interval->{end} - $current_interval->{start} + 1;
-  $current_interval->{cigar} .= $match_length . "M";
+  my $first_interval = shift @shifted_intervals;
 
-  my @alignments = ($current_interval);
+  # Create a first alignement object
+  my $query_mapping_start = $first_interval->reference_interval->start - $original_interval->start;
+  my $current_alignment = CracTools::SimCT::Alignment->new(
+    chr     => $first_interval->chr,
+    start   => $first_interval->start,
+    strand  => $first_interval->strand,
+    query_length  => $original_interval->length,
+    query_mapping_start => $query_mapping_start,
+  );
+
+  # Append the first interval to the alignment
+  $current_alignment->appendCigarElement(
+    CracTools::SimCT::Alignment::CigarElement->new(
+      op => 'M',
+      nb => $first_interval->length,
+    ),
+  );
+
+  my @alignments = ($current_alignment);
+
+  # TODO change prev_interval by "current_alignment"
+  my $prev_interval = $first_interval;
   foreach my $shifted_interval (@shifted_intervals) {
     # If this block is collinear with the bed_line genomic coordinate
     # we only update the block_start according to the line start
-    if($current_interval->{chr} eq $shifted_interval->{chr} &&
-      $current_interval->{strand} eq $shifted_interval->{strand} &&
-      $current_interval->{end} < $shifted_interval->{start}) {
+    if($prev_interval->chr eq $shifted_interval->chr &&
+      $prev_interval->strand eq $shifted_interval->strand &&
+      $prev_interval->end < $shifted_interval->start) {
       # We have a deletion in the genome we update the cigar with an insertion
-      if($shifted_interval->{start} > ($current_interval->{end} + 1)) {
-        my $del_length = $shifted_interval->{start} - $current_interval->{end} - 1;
-        $current_interval->{cigar} .= $del_length . "D";
+      if($shifted_interval->start > ($prev_interval->end + 1)) {
+        $current_alignment->appendCigarElement(
+          CracTools::SimCT::Alignment::CigarElement->new(
+            op => 'D',
+            nb => $shifted_interval->start - $prev_interval->end - 1,
+          ),
+        );
       }
       # We have an insertion in the genome we update the cigar with a deletion
-      if($shifted_interval->{ref_start} > ($current_interval->{ref_end}+1)) {
-        my $ins_length = $shifted_interval->{ref_start} - $current_interval->{ref_end} - 1;
-        $current_interval->{cigar} .= $ins_length . "I";
+      if($shifted_interval->reference_interval->start > ($prev_interval->reference_interval->end+1)) {
+        $current_alignment->appendCigarElement(
+          CracTools::SimCT::Alignment::CigarElement->new(
+            op => 'I',
+            nb => $shifted_interval->reference_interval->start - $prev_interval->reference_interval->end - 1,
+          ),
+        );
       }
-      # Update ref start and end 
-      #$current_interval->{ref_start}  = $shifted_interval->{ref_start};
-      $current_interval->{ref_end}     = $shifted_interval->{ref_end};
-      $current_interval->{end}         = $shifted_interval->{end};
-      $current_interval->{ref_length} += $shifted_interval->{ref_length};
     # Otherwise it is a chimeric alignment
     } else {
-      $current_interval = $shifted_interval;
-      push @alignments, $current_interval;
+      # Create a new alignement object
+      $query_mapping_start = $shifted_interval->reference_interval->start - $original_interval->start;
+      $current_alignment = CracTools::SimCT::Alignment->new(
+        chr     => $shifted_interval->chr,
+        start   => $shifted_interval->start,
+        strand  => $shifted_interval->strand,
+        query_length  => $original_interval->length,
+        query_mapping_start => $query_mapping_start,
+      );
+      push @alignments, $current_alignment;
     }
-    my $match_length = $shifted_interval->{end} - $shifted_interval->{start} + 1;
-    $current_interval->{cigar} .= $match_length . "M";
+    $current_alignment->appendCigarElement(
+      CracTools::SimCT::Alignment::CigarElement->new(
+        op => 'M',
+        nb => $shifted_interval->length,
+      ),
+    );
+    $prev_interval = $shifted_interval;
   }
   return @alignments;
 }
@@ -157,86 +201,61 @@ sub getSplicedAlignments {
   my $self = shift;
   my @intervals = @_;
   my @alignments;
+
+  # Compute the whole length of the query
   my $query_length = 0;
+  map { $query_length += $_->length } @intervals;
+
   # Loop over splices
   foreach my $interval (@intervals) {
-    my $query_start  = $interval->[1];
-    my $query_end    = $interval->[2];
-
     # First we get shifted intervals
-    my @block_alignments = $self->getAlignments(@{$interval});
+    my @block_alignments = $self->getAlignments($interval);
 
     my $prev_alignment = $alignments[$#alignments];
     foreach my $curr_alignment (@block_alignments) {
       # If it is not the first alignment we look for a splice
       # alignement
       if(defined $prev_alignment &&
-        $prev_alignment->{chr} eq $curr_alignment->{chr} &&
-        $prev_alignment->{strand} eq $curr_alignment->{strand} &&
-        $prev_alignment->{reverse} == $curr_alignment->{reverse} &&
-        ((!$curr_alignment->{reverse} && 
-          $prev_alignment->{end} < $curr_alignment->{start}) ||
-        ($curr_alignment->{reverse} &&
-          $prev_alignment->{start} > $curr_alignment->{end}))) {
-        # Regular spliced alignment
-        if(!$curr_alignment->{reverse}) {
-          # We can merge the two alignments
-          my $splice_length  = $curr_alignment->{start} - $prev_alignment->{end} - 1;
-          $prev_alignment->{cigar} .= $splice_length . "N" . $curr_alignment->{cigar};
-          $prev_alignment->{end} = $curr_alignment->{end};
-        # Reverse spliced alignment
-        } else {
-          # We can merge the two alignments
-          my $splice_length  = $prev_alignment->{start} - $curr_alignment->{end} - 1;
-          $prev_alignment->{cigar} = $curr_alignment->{cigar} . $splice_length . "N" . $prev_alignment->{cigar};
-          $prev_alignment->{start} = $curr_alignment->{start};
+        $prev_alignment->chr eq $curr_alignment->chr &&
+        $prev_alignment->strand eq $curr_alignment->strand &&
+        $prev_alignment->end < $curr_alignment->start) {
+
+        # We merge two alignments, we need to transform the softclips into insertions
+        if($prev_alignment->right_softclip > 0) {
+          $prev_alignment->appendCigarElement(CracTools::SimCT::Alignment::CigarElement->new(
+            op => 'I',
+            nb => $prev_alignment->right_softclip,
+          ));
         }
-        # Update ref_end pos
-        $prev_alignment->{ref_end} = $curr_alignment->{ref_end};
-        $prev_alignment->{ref_length} += $curr_alignment->{ref_length};
-        # Skip this alignement and go to the next one
-        next;
-      # Otherwise it is a the first or a chimeric alignment and we 
-      # can set the left softclip
+        # Regular spliced alignment
+        # We can merge the two alignments
+        my $splice_length  = $curr_alignment->start - $prev_alignment->end - 1;
+        $prev_alignment->appendCigarElement(CracTools::SimCT::Alignment::CigarElement->new(
+          op => 'N',
+          nb => $splice_length,
+        ));
+        foreach my $cigel ($curr_alignment->allCigarElements) {
+          $prev_alignment->appendCigarElement($cigel);
+        }
+        # Now we update the query length
+        $prev_alignment->query_length($query_length);
+        #next;
+      # Otherwise this is a chimeric alignment and we push this alignement
       } else {
-        $curr_alignment->{left_softclip} = $curr_alignment->{ref_start} - $query_start + $query_length;
+        if(defined $prev_alignment) {
+          $prev_alignment->query_length($query_length);
+          $curr_alignment->query_mapping_start($prev_alignment->query_mapping_end + 1);
+        }
+        $prev_alignment = $curr_alignment;
+        push @alignments, $curr_alignment;
       }
-      $prev_alignment = $curr_alignment;
-      push @alignments, $curr_alignment;
     }
-    $query_length += $query_end - $query_start + 1;
   }
-  # Set right softclips
-  foreach my $alignment (@alignments) {
-    $alignment->{right_softclip} = $query_length - $alignment->{left_softclip} - $alignment->{ref_length};
-    #$alignment->{cigar}  = $alignment->{left_softclip}."S".$alignment->{cigar} if $alignment->{left_softclip} > 0;
-    #$alignment->{cigar} .= $alignment->{right_softclip}."S" if $alignment->{right_softclip} > 0;
-  }
-  #my $query_start  = $intervals[0]->[1];
-  #my $query_end    = $intervals[$#intervals]->[2];
-  ## Prepend and append softclips
-  #foreach my $alignment (@alignments) {
-  #  if($alignment->{ref_start} > $query_start) {
-  #    my $softclip_length = $alignment->{ref_start} - $query_start;
-  #    if($softclip_length > 100) {
-  #      print STDERR "Query START: $query_start\n";
-  #      print STDERR Dumper($alignment);
-  #    }
-  #    $alignment->{cigar} = $softclip_length."S".$alignment->{cigar};
-  #  }
-  #  if($alignment->{ref_end} < $query_end) {
-  #    my $softclip_length  = $query_end - $alignment->{ref_end};
-  #    if($softclip_length > 100) {
-  #      print STDERR "Query END: $query_end\n";
-  #      print STDERR Dumper($alignment);
-  #    }
-  #    $alignment->{cigar} .= $softclip_length."S";
-  #  }
-  #}
   return @alignments;
 }
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -272,14 +291,9 @@ values to shift this interval to the new reference.
 
 =head2 shiftInterval($chr,$start,$end,$strand) => ArrayRef[HashRef{'Intervals'}]
 
-  Arg [1] : 'Str'    - Chromosome name
-  Arg [2] : 'Int'    - Start position of the interval (old ref)
-  arg [3] : 'int'    - End position of the interval (old ref)
-  Arg [4] : 'Strand' - Strand of the interval
+  Arg [1] : 'CracTools::SimCT::GenomicInterval'  - Genomic interval to shift
 
 Shift the given interval from the new reference to the old reference and return
-a collection of genomic interval. Such an genomic interval is :
-
-  $interval = { chr => '', start => '', end => '', strand => '' }
+a list of CracTools::SimCT::GenomicInterval.
 
 =head2 shiftAnnotation($chr,$start,$end,$strand)

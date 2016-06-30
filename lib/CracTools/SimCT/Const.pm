@@ -3,7 +3,6 @@ use warnings;
 package CracTools::SimCT::Const;
 # ABSTRACT: SimCT constants
 
-
 # Tolerance on mapping position
 our $SUB_RATE             = 0.01;
 our $INS_RATE             = 0.005;
@@ -17,6 +16,10 @@ our $FLUX_OUTPUT_BASENAME = "fluxSimulator";
 our $CHR_FUSIONS          = "Fusions";
 our $MAX_SPLICE_LENGTH    = 300000;
 our $OUTPUT_DIRECTORY     = "simCT_simulation";
+
+# Read simulator default parameters
+our $UNIQ_IDS               = 1;
+our $DISABLE_ERROR_ENCODING = 0;
 
 # Flux-simulator default parameters
 our $NB_MOLECULES         = 5000000;

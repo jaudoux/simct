@@ -8,6 +8,8 @@ use Tie::RefHash;
 
 use CracTools::Utils;
 use CracTools::SimCT::Utils;
+use CracTools::SimCT::LiftOver;
+use CracTools::SimCT::MutationQuery;
 
 has 'liftover' => (
   is  => 'ro',
@@ -17,8 +19,8 @@ has 'liftover' => (
 
 has 'mutation_query' => (
   is  => 'ro',
-  isa => 'CracTools::Interval::Query',
-  default => sub { CracTools::Interval::Query->new(); },
+  isa => 'CracTools::SimCT::MutationQuery',
+  default => sub { CracTools::SimCT::MutationQuery->new(); },
 );
 
 sub BUILD {
@@ -34,13 +36,13 @@ sub BUILD {
     my $chr_length      = $genome_simulator->genome->getReferenceLength($chr);
 
     foreach my $mut ($genome_simulator->sortedMutations($chr)) {
-      
+
       # Get the mutations pos on the simulated genome
-      my $mut_sg_pos = $mut->pos - $offset;
+      my $mut_sg_pos = $mut->start - $offset;
 
       # add the mutation into the mutation query
-      $self->mutation_query->addInterval($chr,$mut_sg_pos,$mut_sg_pos,1,$mut);
-      
+      $self->mutation_query->addMutation($mut);
+
       # Skip mutations that have no incidence on the offset
       next if $mut->referenceLength == 1 && $mut->mutationLength == 1;
 
@@ -52,7 +54,7 @@ sub BUILD {
       $self->liftover->addInterval($chr,$prev_pos,$index-1,$offset);
 
       # Update offset and index
-      $index  += $mut->mutationLength; 
+      $index  += $mut->mutationLength;
       $offset += ($mut->referenceLength - $mut->mutationLength);
     }
     # Add the last interval
@@ -80,7 +82,8 @@ sub BUILD {
   }
 };
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -94,3 +97,10 @@ __END__
 =head2 mutation_query
 
 =head1 METHODS
+
+=head2 getAlignements
+
+    Arg[1]  :  'CracTools::SimCT::GenomicInterval' - genomic interval
+
+Given a genomic interval over the simulated genome, returns a list of tha alignement
+over the reference genome as a list of genomic intervals.

@@ -12,9 +12,20 @@ use CracTools::SimCT::Mutation;
 use CracTools::SimCT::Mutation::Insertion;
 use CracTools::SimCT::Mutation::Deletion;
 use CracTools::SimCT::Mutation::Substitution;
+use CracTools::SimCT::GenomicInterval;
 use CracTools::Utils;
 use Inline::Files 0.68;
 use File::Temp;
+
+sub newInterval {
+  my ($chr,$start,$end,$strand) = @_;
+  return CracTools::SimCT::GenomicInterval->new(
+    chr   => $chr,
+    start => $start,
+    end   => $end,
+    strand => defined $strand? $strand : '+',
+  );
+}
 
 {
   # Load the fasta file
@@ -51,21 +62,21 @@ use File::Temp;
   $gs->addMutation(
     CracTools::SimCT::Mutation::Substitution->new(
       chr => "1",
-      pos => 10,
+      start => 10,
       new_nuc => 'G',
     ),
   );
   $gs->addMutation(
     CracTools::SimCT::Mutation::Deletion->new(
       chr => "1",
-      pos => 15,
+      start => 15,
       length => 10,
     ),
   );
   $gs->addMutation(
     CracTools::SimCT::Mutation::Insertion->new(
       chr => "1",
-      pos => 2,
+      start => 2,
       inserted_sequence => 'AGG',
     ),
   );
@@ -121,22 +132,22 @@ use File::Temp;
   ok($entry->{seq} =~ /^($fusion_1)($fusion_2)($fusion_3)/,"fusion sequence");
 
   # Verify liftover functions
-  my $shifted_interval = $sg->liftover->shiftInterval("1",15,20);
-  is($shifted_interval->[0]->{start},12,"shiftInterval (1)");
-  is($shifted_interval->[0]->{end},14,"shiftInterval (2)");
-  is($shifted_interval->[1]->{start},25,"shiftInterval (3)");
-  is($shifted_interval->[1]->{end},27,"shiftInterval (4)");
+  my $shifted_interval = $sg->liftover->shiftInterval(newInterval("1",15,20));
+  is($shifted_interval->[0]->start,12,"shiftInterval (1)");
+  is($shifted_interval->[0]->end,14,"shiftInterval (2)");
+  is($shifted_interval->[1]->start,25,"shiftInterval (3)");
+  is($shifted_interval->[1]->end,27,"shiftInterval (4)");
 
   # Verify liftover functions for fusions
-  $shifted_interval = $sg->liftover->shiftInterval("Fusions",2,10);
-  is($shifted_interval->[0]->{chr},1,"shiftInterval (1)");
-  is($shifted_interval->[0]->{start},11,"shiftInterval (1)");
-  is($shifted_interval->[0]->{end},14,"shiftInterval (2)");
-  is($shifted_interval->[0]->{strand},'+',"shiftInterval (2)");
-  is($shifted_interval->[1]->{chr},2,"shiftInterval (1)");
-  is($shifted_interval->[1]->{start},15,"shiftInterval (1)");
-  is($shifted_interval->[1]->{end},19,"shiftInterval (2)");
-  is($shifted_interval->[1]->{strand},'-',"shiftInterval (2)");
+  $shifted_interval = $sg->liftover->shiftInterval(newInterval("Fusions",2,10));
+  is($shifted_interval->[0]->chr,1,"shiftInterval (1)");
+  is($shifted_interval->[0]->start,11,"shiftInterval (1)");
+  is($shifted_interval->[0]->end,14,"shiftInterval (2)");
+  is($shifted_interval->[0]->strand,'+',"shiftInterval (2)");
+  is($shifted_interval->[1]->chr,2,"shiftInterval (1)");
+  is($shifted_interval->[1]->start,15,"shiftInterval (1)");
+  is($shifted_interval->[1]->end,19,"shiftInterval (2)");
+  is($shifted_interval->[1]->strand,'-',"shiftInterval (2)");
 
   # Verify if annotations are good
   my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');
@@ -146,7 +157,7 @@ use File::Temp;
   is($first_exon->{start},13,"generateGenome - GTF control (1)");
   is($first_exon->{end},18,"generateGenome - GTF control (2)");
   # Exon 2 is supressed by the deletion
-  is($second_exon->{chr}, 2,"generateGenome - GTF control (3)"); 
+  is($second_exon->{chr}, 2,"generateGenome - GTF control (3)");
   # Check the first fusion
   {
     my $fusion_exon_1   = $gtf_it->();

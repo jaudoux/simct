@@ -23,7 +23,8 @@ has length => (
   required  => 1,
 );
 
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -32,7 +33,7 @@ __END__
 =head2 new
 
   Arg [chr]    : 'Str'   - deletion's chromosome
-  Arg [pos]    : 'Int'   - deletion's strand
+  Arg [start]    : 'Int'   - deletion's strand
   Arg [length] : 'Int'   - deletion length
 
 Create a new 'CracTools::SimCT::Mutation::Deletion'

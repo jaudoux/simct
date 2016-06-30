@@ -21,6 +21,11 @@ subtype 'DNAnuc',
   where { $_ =~ /^[ACGNTRYSWKMBDHVatgcnryswkmbdhv]$/ },
   message { "A DNA nucleotide must be encoded over the alphabet defined by IUPAC code" };
 
+subtype 'CigarOperator',
+  as 'Str',
+  where { $_ =~ /^[MIDNSHPX=]$/ },
+  message { "A Cigar operator must respect the SAM format specifications"},
+
 subtype 'Natural',
   as 'Int',
   where { $_ > 0 };

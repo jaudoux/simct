@@ -23,8 +23,8 @@ has inserted_sequence => (
   required => 1,
 );
 
-
-1;
+no Moose;
+__PACKAGE__->meta->make_immutable;
 
 __END__
 
@@ -33,7 +33,7 @@ __END__
 =head2 new
 
   Arg [chr]               : 'Str'   - insertion's chromosome
-  Arg [pos]               : 'Int'   - insertion's strand
+  Arg [start]               : 'Int'   - insertion's strand
   Arg [inserted_sequence] : 'Str'   - inserted sequence
 
 Create a new 'CracTools::SimCT::Mutation::Insertion'
