@@ -161,13 +161,6 @@ $mutation_generator->generateMutations();
 # Create the simulated genome
 print STDERR "Generate the simulated genome as FASTA and GTF\n";
 mkdir $output_dir;
-my $simulated_genome_dir  = File::Spec->catfile($output_dir,"homozygous_genome");
-my $simulated_annotations = File::Spec->catfile($output_dir,"homozygous_genome","annotations.gtf");
-mkdir $simulated_genome_dir;
-my $simulated_genome = $genome_simulator->generateGenome(
-  genome_dir => "$simulated_genome_dir",
-  annotations => $annotations,
-);
 foreach my $allele_name (("allele_A", "allele_B")) {
   my $allele_genom_simulator;
   if($allele_name eq "allele_A") {
@@ -175,10 +168,10 @@ foreach my $allele_name (("allele_A", "allele_B")) {
   } else {
     $allele_genom_simulator = $allele_B;
   }
-  $simulated_genome_dir  = File::Spec->catfile($output_dir,$allele_name);
-  $simulated_annotations = File::Spec->catfile($output_dir,$allele_name,"annotations.gtf");
+  my $simulated_genome_dir  = File::Spec->catfile($output_dir,$allele_name);
+  my $simulated_annotations = File::Spec->catfile($output_dir,$allele_name,"annotations.gtf");
   mkdir $simulated_genome_dir;
-  $simulated_genome = $allele_genom_simulator->generateGenome(
+  my $simulated_genome = $allele_genom_simulator->generateGenome(
     genome_dir => $simulated_genome_dir,
     annotations => $annotations,
   );
