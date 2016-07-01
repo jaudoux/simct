@@ -40,6 +40,8 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
   -i,--insertion-rate     Rate a wich insertions are randomly inserted in the reference genome
   -d,--deletion-rate      Rate a wich deletions are randomly inserted in the reference genome
 
+  --heterozygous-compound-rate Rate at wich mutations are heterozygous-compound
+
 =head2 Others
 
   --disable-error-encoding    Remove error encoding from read names
@@ -58,7 +60,7 @@ my $max_splice_length      = $CracTools::SimCT::Const::MAX_SPLICE_LENGTH;
 my $vcf_ratio  = 0.8;
 my $nb_fusions = 0;
 my $nb_process = 1;
-my $genotype_rate = 0.5;
+my $heterozygous_compound_rate = 0.01;
 
 my @ARGV_copy = @ARGV;
 
@@ -77,9 +79,10 @@ GetOptions( "v|verbose"             => \$verbose,
             "uniq-ids"              => \$uniq_ids,
 
             # Mutations parameters
-            "s|substitution-rate=f" => \$sub_rate,
-            "i|insertion-rate=f"    => \$ins_rate,
-            "d|deletion-rate=f"     => \$del_rate,
+            "s|substitution-rate=f"         => \$sub_rate,
+            "i|insertion-rate=f"            => \$ins_rate,
+            "d|deletion-rate=f"             => \$del_rate,
+            "heterozygous-compound-rate=f"  => \$heterozygous_compound_rate,
 
           ) or pod2usage(-verbose => 1);
 
@@ -158,6 +161,25 @@ $mutation_generator->generateMutations();
 $mutation_generator->genome_simulator($allele_B);
 $mutation_generator->generateMutations();
 
+
+# Add heterozygous-compound mutations
+foreach my $mut ($allele_A->allMutations) {
+  if (ref $mut eq 'CracTools::SimCT::Mutation::Substitution') {
+    if(rand(1) <= $heterozygous_compound_rate) {
+      #delete $nucleotides{$mut->reference_sequence};
+      my @possible_nucleotides = grep { $_ ne $mut->mutation_sequence } @{$CracTools::Const::NUCLEOTIDES};
+      my $ret_val = $allele_B->addMutation(
+        CracTools::SimCT::Mutation::Substitution->new(
+          chr => $mut->chr,
+          start => $mut->start,
+          new_nuc => $possible_nucleotides[int(rand(3))],
+        ),
+      );
+      #print STDERR "RET VAL: $ret_val\n";
+    }
+  }
+}
+
 # Create the simulated genome
 print STDERR "Generate the simulated genome as FASTA and GTF\n";
 mkdir $output_dir;
@@ -180,6 +202,7 @@ foreach my $allele_name (("allele_A", "allele_B")) {
 my $mutations_output = File::Spec->catfile($output_dir,"mutations.vcf.gz");
 my $mutations_fh     = CracTools::Utils::getWritingFileHandle($mutations_output);
 
+
 # Find haploide and diploide mutations
 my %mut_hash;
 foreach my $allele (($allele_A,$allele_B)) {
@@ -188,7 +211,6 @@ foreach my $allele (($allele_A,$allele_B)) {
     push @{$mut_hash{$mut_key}}, $mut;
   }
 }
-
 
 # Print  mutations
 my @mut_keys = sort { $mut_hash{$a}->[0]->chr cmp $mut_hash{$b}->[0]->chr || $mut_hash{$a}->[0]->start <=> $mut_hash{$b}->[0]->start } keys %mut_hash;

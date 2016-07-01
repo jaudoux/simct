@@ -4,9 +4,9 @@ package CracTools::SimCT::Const;
 # ABSTRACT: SimCT constants
 
 # Tolerance on mapping position
-our $SUB_RATE             = 0.01;
-our $INS_RATE             = 0.005;
-our $DEL_RATE             = 0.005;
+our $SUB_RATE             = 0.001;
+our $INS_RATE             = 0.0005;
+our $DEL_RATE             = 0.0005;
 our $MAX_INS              = 15;
 our $MAX_DEL              = 15;
 our $FASTA_LINE_LENGTH    = 60;
