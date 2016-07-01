@@ -125,7 +125,9 @@ sub generateGenome {
 
       # Add the interval between the previous mutation and the current one
       # to the liftover
-      $annot_lifter->addInterval($chr,$index,$mut->start-1,$offset);
+      if($mut->start > 0) {
+        $annot_lifter->addInterval($chr,$index,$mut->start-1,$offset);
+      }
 
       # We read the sequence before the mutation and print it in
       # the output fasta
@@ -148,6 +150,11 @@ sub generateGenome {
       # Update the offset and the index
       $offset += ($mut->mutationLength - $mut->referenceLength);
       $index  = $mut->start + $mut->referenceLength;
+
+      # Add the mutation intervals if the mutations has a positive referenceLength
+      if($mut->referenceLength > 0 && $index > 0) {
+        $annot_lifter->addInterval($chr,$mut->start,$index - 1,$offset);
+      }
     }
 
     # Now we print what's left of the reference
