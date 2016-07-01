@@ -161,6 +161,13 @@ $mutation_generator->generateMutations();
 # Create the simulated genome
 print STDERR "Generate the simulated genome as FASTA and GTF\n";
 mkdir $output_dir;
+my $simulated_genome_dir  = File::Spec->catfile($output_dir,"homozygous_genome");
+my $simulated_annotations = File::Spec->catfile($output_dir,"homozygous_genome","annotations.gtf");
+mkdir $simulated_genome_dir;
+my $simulated_genome = $genome_simulator->generateGenome(
+  genome_dir => "$simulated_genome_dir",
+  annotations => $annotations,
+);
 foreach my $allele_name (("allele_A", "allele_B")) {
   my $allele_genom_simulator;
   if($allele_name eq "allele_A") {
@@ -168,10 +175,10 @@ foreach my $allele_name (("allele_A", "allele_B")) {
   } else {
     $allele_genom_simulator = $allele_B;
   }
-  my $simulated_genome_dir  = File::Spec->catfile($output_dir,$allele_name);
-  my $simulated_annotations = File::Spec->catfile($output_dir,$allele_name,"annotations.gtf");
+  $simulated_genome_dir  = File::Spec->catfile($output_dir,$allele_name);
+  $simulated_annotations = File::Spec->catfile($output_dir,$allele_name,"annotations.gtf");
   mkdir $simulated_genome_dir;
-  my $simulated_genome = $allele_genom_simulator->generateGenome(
+  $simulated_genome = $allele_genom_simulator->generateGenome(
     genome_dir => $simulated_genome_dir,
     annotations => $annotations,
   );
@@ -180,26 +187,20 @@ foreach my $allele_name (("allele_A", "allele_B")) {
 my $mutations_output = File::Spec->catfile($output_dir,"mutations.vcf.gz");
 my $mutations_fh     = CracTools::Utils::getWritingFileHandle($mutations_output);
 
-# Print diploide mutations
-foreach my $mut ($genome_simulator->allMutations) {
-  # Get raw VCF record
-  my $vcf_line = $mut->getVCFRecord;
-  # Update information with read names and depth
-  $vcf_line->{info}->{GT} = ["1|1"];
-  CracTools::SimCT::Utils::printVCFLine($mutations_fh,$vcf_line);
-}
-
-# Print haploide mutations
-my %mutations;
+# Find haploide and diploide mutations
+my %mut_hash;
 foreach my $allele (($allele_A,$allele_B)) {
   foreach my $mut ($allele->allMutations) {
     my $mut_key = $mut->chr."@".$mut->start;
-    push @{$mutations{$mut_key}}, $mut;
+    push @{$mut_hash{$mut_key}}, $mut;
   }
 }
 
-foreach my $mut_key (keys %mutations) {
-  my @mutations = @{$mutations{$mut_key}};
+
+# Print  mutations
+my @mut_keys = sort { $mut_hash{$a}->[0]->chr cmp $mut_hash{$b}->[0]->chr || $mut_hash{$a}->[0]->start <=> $mut_hash{$b}->[0]->start } keys %mut_hash;
+foreach my $mut_key (@mut_keys) {
+  my @mutations = @{$mut_hash{$mut_key}};
   # Get raw VCF record
   my $vcf_line = $mutations[0]->getVCFRecord;
   # true haploide mutation
