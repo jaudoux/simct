@@ -80,7 +80,7 @@ sub sortedMutations {
   if(defined $chr) {
     return sort {$a->start <=> $b->start} grep {$_->chr eq $chr} $self->allMutations;
   } else {
-    return sort {$a->chr cmp $b->chr && $a->start <=> $b->start} $self->allMutations;
+    return sort {$a->chr cmp $b->chr || $a->start <=> $b->start} $self->allMutations;
   }
 }
 
