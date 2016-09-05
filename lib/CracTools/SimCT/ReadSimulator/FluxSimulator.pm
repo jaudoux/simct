@@ -21,12 +21,56 @@ has 'flux_binary' => (
   default => $CracTools::SimCT::Const::FLUX_BINARY,
 );
 
+around '_postProcessSimulation' => sub {
+  my $orig = shift;
+  my $self = shift;
+  my $simulation = shift;
+  my $simulation_dir = $simulation->simulation_dir;
+
+  # Print gene_counts and transcript_counts files
+  my $transcript_counts_output = File::Spec->catfile($simulation_dir,"transcript-counts.tsv.gz");
+  my $transcript_counts_fh     = CracTools::Utils::getWritingFileHandle($transcript_counts_output);
+  my $gene_counts_output       = File::Spec->catfile($simulation_dir,"gene-counts.tsv.gz");
+  my $gene_counts_fh           = CracTools::Utils::getWritingFileHandle($gene_counts_output);
+  my $flux_profile_fh          = CracTools::Utils::getReadingFileHandle($simulation->{profile_file});
+  my $gtf_it                   = CracTools::Utils::gffFileIterator($simulation->annotation_file,'gtf');
+
+  # 1. Create a transcript_id => gene conversion hash
+  my %conversion_hash;
+  while(my $annot = $gtf_it->()) {
+    next if $annot->{feature} ne 'exon';
+    my $gene_id = $annot->{attributes}->{gene_id};
+    my $transcript_id = $annot->{attributes}->{transcript_id};
+    next if !defined $gene_id || !defined $transcript_id;
+    $conversion_hash{$transcript_id} = $gene_id;
+  }
+
+  # 2. Merge transrcipt counts into gene counts and print transcript counts
+  print $transcript_counts_fh join("\t","feature","truth"),"\n";
+  tie my %gene_counts, 'Tie::RefHash';
+  while(<$flux_profile_fh>) {
+    my @fields = split("\t",$_);
+    # TODO HANDLE FUSION TRANSCRIPTS!!!!
+    next if !defined $conversion_hash{$fields[1]};
+    $gene_counts{$conversion_hash{$fields[1]}} += $fields[9];
+    print $transcript_counts_fh join("\t",$fields[1],$fields[9]),"\n";
+  }
+
+  # 3. Print gene counts to the corresponding output file
+  print $gene_counts_fh join("\t","feature","truth"),"\n";
+  foreach my $gene (keys %gene_counts) {
+    print $gene_counts_fh join("\t",$gene,$gene_counts{$gene}),"\n";
+  }
+
+  return $self->$orig($simulation);
+};
+
 sub _generateSimulation {
   my $self            = shift;
   my %args            = @_;
 
   my $simulated_genome = $args{simulated_genome};
-  my $output_dir       = $args{simulation_dir};
+  my $output_dir       = $args{output_dir};
   my $genome_dir       = $args{genome_dir};
   my $annotation_file  = $args{annotation_file};
   my $flux_parameters  = $args{flux_parameters};
@@ -65,12 +109,15 @@ sub _generateSimulation {
   system($command);
 
   return CracTools::SimCT::ReadSimulation::FluxSimulator->new(
-    flux_parameters => $flux_parameters,
-    profile_file    => $profile_file,
-    parameter_file  => $parameter_file,
-    library_file    => $library_file,
-    sequencing_file => $sequencing_file,
-    fastq_file      => $fastq_file,
+    annotation_file  => $annotation_file,
+    simulated_genome => $simulated_genome,
+    genome_dir       => $genome_dir,
+    flux_parameters  => $flux_parameters,
+    profile_file     => $profile_file,
+    parameter_file   => $parameter_file,
+    library_file     => $library_file,
+    sequencing_file  => $sequencing_file,
+    fastq_file       => $fastq_file,
   );
 }
 

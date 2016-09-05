@@ -81,6 +81,20 @@ sub newInterval {
     ),
   );
 
+
+
+  # chr1
+  #                111111111----------1222222222233333333334444444444555
+  #      0123456789012345678----------9012345678901234567890123456789012
+  # sim: ATAGGGGTAGTACGCGTCA----------GTCT
+  # ref: AT---GGTAGTACCCGTCGCATGTCGAAAGTCT
+  #                   [ E1 ]    [ E2 ]
+  #      01---234567890123456789012345678901234567890123456789012
+  #                   1111111111222222222233333333334444444444555
+  #
+  # chr2
+  #
+
   # Create a fusion gene with the first exon of geneA and the second exon of geneB
   my $gene_A  = $annotations->getGene('geneA');
   my @exons_A = $gene_A->sortedExons;

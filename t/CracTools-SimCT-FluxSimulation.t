@@ -50,7 +50,13 @@ has '+simulator_name' => (
 );
 
 sub _generateSimulation {
-  return TestSimulation->new(@_);
+  my $self = shift;
+  my %args = @_;
+  return TestSimulation->new(
+    simulated_genome => $args{simulated_genome},
+    genome_dir       => $args{genome_dir},
+    simulation_dir   => $args{simulation_dir},
+  );
 }
 
 no Moose;
@@ -110,16 +116,16 @@ use File::Temp;
   );
 
   # Run the simulation with the "test" simulator
-  my $test_simulator = TestSimulator->new();
+  my $test_simulator = TestSimulator->new(test => "toto");
   my $simulation_dir = File::Temp->newdir();
   my $test_simulation = $test_simulator->runSimulation(
     simulated_genome => $simulated_genome,
-    genome_dir => $simulated_genome_dir,
-    simulation_dir => $simulation_dir,
+    genome_dir       => $simulated_genome_dir->dirname,
+    simulation_dir   => $simulation_dir->dirname,
   );
 
   is($test_simulator->simulator_name,'test_simulator');
-  my $simulation_FASTQ_file = File::Spec->catfile($simulation_dir,"reads.fastq.gz");
+  my $simulation_FASTQ_file = File::Spec->catfile($test_simulation->simulation_dir,"reads.fastq.gz");
   my $fastq_it = CracTools::Utils::seqFileIterator($simulation_FASTQ_file,'fastq');
   my $read1 = $fastq_it->();
   is($read1->{name},"0:1,1,+,12M");

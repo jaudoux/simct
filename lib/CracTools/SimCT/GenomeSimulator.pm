@@ -114,6 +114,7 @@ sub generateGenome {
       }
     }
 
+    my $prev_pos        = 0;
     my $remainder       = 0; # What's left in the current FASTA line
     my $index           = 0; # Index of the original FASTA sequence
     my $offset          = 0; # Offset difference between the original and the mutated genome
@@ -123,15 +124,9 @@ sub generateGenome {
 
     foreach my $mut ($self->sortedMutations($chr)) {
 
-      # Add the interval between the previous mutation and the current one
-      # to the liftover
-      if($mut->start > 0) {
-        $annot_lifter->addInterval($chr,$index,$mut->start-1,$offset);
-      }
-
       # We read the sequence before the mutation and print it in
       # the output fasta
-      my $frag    = substr $chr_seq, 0, $mut->start-$index, "";
+      my $frag    = substr $chr_seq, 0, $mut->start - $index, "";
       $remainder  = CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$frag,$remainder);
 
       # Give the a reference to the chr sequence for the mutation
@@ -147,14 +142,17 @@ sub generateGenome {
         $remainder,
       );
 
+      # Update prev_pos and index
+      $prev_pos = $index;
+      $index    = $mut->start + CracTools::SimCT::Utils::min($mut->referenceLength,$mut->mutationLength);
+
+      # Add the current interval
+      $annot_lifter->addInterval($chr,$prev_pos,$index-1,$offset);
+
       # Update the offset and the index
       $offset += ($mut->mutationLength - $mut->referenceLength);
       $index  = $mut->start + $mut->referenceLength;
 
-      # Add the mutation intervals if the mutations has a positive referenceLength
-      if($mut->referenceLength > 0 && $index > 0) {
-        $annot_lifter->addInterval($chr,$mut->start,$index - 1,$offset);
-      }
     }
 
     # Now we print what's left of the reference

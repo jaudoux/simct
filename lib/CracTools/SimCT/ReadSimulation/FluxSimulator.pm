@@ -5,6 +5,10 @@ use Moose;
 
 with 'CracTools::SimCT::ReadSimulation';
 
+has '+annotation_file' => (
+  required => 1,
+);
+
 has 'flux_parameters' => (
   is => 'ro',
   isa => 'HashRef',
@@ -34,6 +38,7 @@ has 'fastq_file' => (
   is => 'ro',
   isa => 'Str',
 );
+
 
 sub getGenomicIntervalsIterator {
   my $self = shift;
@@ -68,7 +73,7 @@ sub getSequenceIterator {
       if($self->isPairedEnd && $read_id % 2 == 0) {
         $read->{reversed} = 1;
       } else {
-        $read->{reversed} = O;
+        $read->{reversed} = undef;
       }
       $read->{read_id} = $read_id;
       $read_id++;

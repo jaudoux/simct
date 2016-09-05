@@ -3,8 +3,9 @@
 ## New features
 - [ ] Introduce repeat mutations
 - [ ] Introduce CNV variants
+- [ ] Add an option to simulate new transcripts variants and new genes.
 
-## 
+##
 - [ ] Print simCT configuration values (ins_rate and such in a output file) in STDERR so it can be redirected to some "log" file
 - [ ] Add a mutation generator that is based on a VCF file for example the one from dbSNP
 - [ ] Find a syntax for generating a simulated experiment (in YAML if possible)
@@ -28,6 +29,12 @@
 - [x] Add SAM support for alignements or alignment should be encoded in reads names?
       Readname seems to be the best solution, and it can still be transformed to
       BAM, err-file and such
+- [ ] Do not mute N bases
+- [ ] Add a way to simulate Post-transcriptionnal mutations
+- [ ] Scan experimental data (aligned) to determine the SimCT parameters that would be the
+      closest to the real world.
+- [ ] Add a function to test if the ReadSimulator softwares is accessible from the path and
+      check its version?
 
 The output of simCT should be:
 
@@ -54,5 +61,5 @@ CABgAAAKAAEAABgCAAAABABAQAAgAAACDD : encoded error list in base 64 (decode as fo
 1. Multi-genomes => Choose a method to create the pylogenye of simulated genomes...
 2. Multi expression profiles => Chose a function to do that...
 
-# Configuration YAML 
+# Configuration YAML
 Configuration file should be able

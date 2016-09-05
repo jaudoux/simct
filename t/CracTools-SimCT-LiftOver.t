@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 61;
+use Test::More tests => 62;
 #use Test::More tests => 4;
 use CracTools::SimCT::LiftOver;
 use CracTools::SimCT::GenomicInterval;
@@ -51,6 +51,12 @@ $liftover->addInterval("chr1",31,40,40,"chr3",1); # chimeric alignment reversed 
   is($annot->start,11);
   is($annot->end,25);
   is($annot->strand,'+');
+}
+
+# Included in the insertion
+{
+  my $annot = $liftover->shiftAnnotation(newInterval("chr1",10,14));
+  is($annot, undef);
 }
 
 # Overlap of both insertion and deletion

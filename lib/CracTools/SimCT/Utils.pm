@@ -3,7 +3,6 @@ package CracTools::SimCT::Utils;
 
 use Moose::Util::TypeConstraints;
 
-use List::Util qw(min max);
 use CracTools::SimCT::Const;
 
 subtype 'Strand',
@@ -123,6 +122,11 @@ sub printFASTA($$$) {
     $remainder = 0;
   }
   return $remainder;
+}
+
+sub min($$) {
+  my ($a, $b) = @_;
+  return $a < $b? $a : $b;
 }
 
 1;

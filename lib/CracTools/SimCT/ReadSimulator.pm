@@ -8,6 +8,7 @@ use File::Spec;
 use Tie::RefHash;
 
 use CracTools::Utils;
+use CracTools::Output;
 use CracTools::SimCT::Const;
 
 has 'simulator_name' => (
@@ -21,7 +22,6 @@ has 'uniq_ids' => (
   isa => 'Bool',
   default => $CracTools::SimCT::Const::UNIQ_IDS,
 );
-
 
 has 'disable_error_encoding' => (
   is => 'rw',
@@ -43,11 +43,23 @@ sub runSimulation {
   my $simulation_dir   = $args{simulation_dir};
 
   # Set the directory for the simulator
-  $args{simulation_dir} = File::Spec->catfile($simulation_dir,$self->simulator_name);
-  File::Path::make_path($args{simulation_dir});
+  $args{output_dir} = File::Spec->catfile($simulation_dir,$self->simulator_name);
+  File::Path::make_path($args{output_dir});
 
   # Create the simulation
   my $simulation = $self->_generateSimulation(%args);
+  $simulation->simulation_dir($simulation_dir);
+
+  # A hook to handle the post-processing of the simulation
+  return $self->_postProcessSimulation($simulation);
+}
+
+sub _postProcessSimulation {
+  my $self = shift;
+  my $simulation = shift;
+
+  my $simulation_dir   = $simulation->simulation_dir;
+  my $simulated_genome = $simulation->simulated_genome;
 
   # Open output files for reads
   my $fastq1_output = $simulation->isPairedEnd?
@@ -61,9 +73,9 @@ sub runSimulation {
     CracTools::Utils::getWritingFileHandle($fastq2_output) : undef;
 
   # Get iterators for sequences, genomic intervals and error positions
-  my $seq_it = $simulation->getSequenceIterator();
+  my $seq_it       = $simulation->getSequenceIterator();
   my $intervals_it = $simulation->getGenomicIntervalsIterator();
-  my $errors_it = $simulation->getErrorsPosIterator();
+  my $errors_it    = $simulation->getErrorsPosIterator();
 
   # Set counters and loop vars
   my $nb_reads  = 0;
@@ -237,6 +249,21 @@ sub runSimulation {
       );
     }
   }
+
+  my $info_file   = File::Spec->catfile($simulation_dir,"info.txt");
+  my $info_output = CracTools::Output->new(file => $info_file);
+  $info_output->printHeaders(
+    version => $CracTools::SimCT::VERSION,
+    #args    => \@ARGV_copy,
+  );
+  my %info = (
+    nb_reads      => $nb_reads,
+    nb_errors     => $nb_errors,
+    nb_splices    => scalar keys %splices,
+    nb_chimeras   => scalar keys %chimeras,
+    nb_mutations  => scalar keys %mutations,
+  );
+  map { $info_output->printLine($_, $info{$_}) } sort keys %info;
 
   return $simulation;
 }

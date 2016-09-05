@@ -35,6 +35,8 @@ sub BUILD {
     my $offset          = 0; # Offset difference between the original and the mutated genome
     my $chr_length      = $genome_simulator->genome->getReferenceLength($chr);
 
+    # FIXME the liftover build here, should only support sub / ins / del, but not
+    # complexe mutations. Look into GenomeSimulator for a valid examples.
     foreach my $mut ($genome_simulator->sortedMutations($chr)) {
 
       # Get the mutations pos on the simulated genome

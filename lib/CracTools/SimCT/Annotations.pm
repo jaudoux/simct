@@ -100,10 +100,10 @@ sub appendGTF {
   my ($self,$fh,$liftover) = @_;
   my @gtf_buffer = ();
   foreach my $gene ($self->sortedGenes) {
-    if(@gtf_buffer > 0 && $gtf_buffer[$#gtf_buffer]->{start} < $gene->start) {
-      map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } sort { $a->{start} <=> $b->{start} } @gtf_buffer;
-      @gtf_buffer = ();
-    }
+    #if(@gtf_buffer > 0 && $gtf_buffer[$#gtf_buffer]->{start} < $gene->start) {
+    #  map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } sort { $a->{start} <=> $b->{start} } @gtf_buffer;
+    #  @gtf_buffer = ();
+    #}
     #my %transcripts_gtf_lines = ();
     #my @sorted_transcript = ();
     foreach my $exon ($gene->sortedExons) {
@@ -127,7 +127,8 @@ sub appendGTF {
             'transcript_id' => $transcript_id,
           },
         };
-        push @gtf_buffer, $gtf_line;
+        #push @gtf_buffer, $gtf_line;
+        CracTools::SimCT::Utils::printGTFLine($fh,$gtf_line);
         #if(!defined $transcripts_gtf_lines{$transcript_id}) {
         #  push @sorted_transcript, $transcript_id;
         #}
@@ -141,7 +142,7 @@ sub appendGTF {
     #  }
     #}
   }
-  map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } @gtf_buffer;
+  #map { CracTools::SimCT::Utils::printGTFLine($fh,$_) } @gtf_buffer;
 }
 
 no Moose;
