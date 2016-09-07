@@ -1,7 +1,8 @@
 use strict;
 use warnings;
 
-use Test::More tests => 36;
+use Test::More tests => 50;
+use CracTools::SimCT::Const;
 use CracTools::SimCT::Utils;
 use CracTools::SimCT::Genome;
 use CracTools::SimCT::Annotations;
@@ -117,6 +118,16 @@ sub newInterval {
       fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(exon => $exon_B_first_exon),
       fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(exon => $exon_A_first_exon),
   ));
+  # Add a false fusion
+  $gs->addFusion(CracTools::SimCT::Fusion->new(
+      fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(exon => $exon_A_first_exon),
+      fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(exon => $exon_A_last_exon),
+  ));
+  # Add a class 3 fusion
+  $gs->addFusion(CracTools::SimCT::Fusion->new(
+      fused_exon_5prim => CracTools::SimCT::Fusion::FusedExon::5prim->new(exon => $exon_A_last_exon),
+      fused_exon_3prim => CracTools::SimCT::Fusion::FusedExon::3prim->new(exon => $exon_A_first_exon),
+  ));
 
   my $genome_dir = File::Temp->newdir();
   #print STDERR "$genome_dir\n";
@@ -205,8 +216,40 @@ sub newInterval {
     is($fusion_exon_3->{start},81);
     is($fusion_exon_3->{end},86);
   }
+  # Check the false fusion
+  {
+    my $fusion_exon_1   = $gtf_it->();
+    is($fusion_exon_1->{start},87);
+    is($fusion_exon_1->{end},98);
+    my @alignments = $sg->liftover->getAlignments(
+      newInterval($CracTools::SimCT::Const::CHR_FUSIONS,86,97)
+    );
+    my $alignment = shift @alignments;
+    is($alignment->cigar,"6M4D6M");
+    is($alignment->start,9);
+  }
+  # Check the class 3 fusion
+  {
+    my $fusion_exon_1   = $gtf_it->();
+    my $fusion_exon_2   = $gtf_it->(); # Fused exon
+    my $fusion_exon_3   = $gtf_it->();
+    is($fusion_exon_1->{start},99);
+    is($fusion_exon_1->{end},104);
+    is($fusion_exon_2->{start},109);
+    is($fusion_exon_2->{end},120);
+    is($fusion_exon_3->{start},125);
+    is($fusion_exon_3->{end},130);
+    my @alignments = $sg->liftover->getAlignments(
+      newInterval($CracTools::SimCT::Const::CHR_FUSIONS,98,129)
+    );
+    my $first_alignment = shift @alignments;
+    is($first_alignment->cigar,"16M16S");
+    is($first_alignment->start,9);
+    my $second_alignment = shift @alignments;
+    is($second_alignment->cigar,"16S16M");
+    is($second_alignment->start,9);
+  }
   # TODO check VCF output
-  #
 }
 
 __CHR1_FASTA__
