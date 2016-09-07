@@ -1,4 +1,4 @@
-package CracTools::SimCT::MutationGenerator::Fusion;  
+package CracTools::SimCT::MutationGenerator::Fusion;
 # ABSTRACT: A mutation generator that introduce random fusions
 
 use Moose;
@@ -7,12 +7,6 @@ use CracTools::Const;
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Fusion;
 use CracTools::SimCT::Fusion::FusedExon;
-
-#has annotations => (
-#  is => 'ro',
-#  isa => 'CracTools::SimCT::Annotations',
-#  required => 1,
-#);
 
 with 'CracTools::SimCT::MutationGenerator';
 
@@ -32,7 +26,7 @@ sub generateMutations {
     my $gene_B = ($annotations->allGenes)[int rand $annotations->nbGenes];
 
     # If we have pick the same gene two times we try again
-    #next if $gene_A eq $gene_B;
+    next if $gene_A eq $gene_B;
 
     # If the fusion is properly added, we decrement our counter
     $nb_fusions-- if $self->genome_simulator->addFusion(
