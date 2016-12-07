@@ -41,9 +41,9 @@ sub generateMutations {
   my @deletions  = defined $self->mutation_collection->deletions?
                     shuffle @{$self->mutation_collection->deletions}     : ();
 
-  my $nb_sub      = min(int($genome_length * $self->sub_rate / 100),scalar @snps);
-  my $nb_ins      = min(int($genome_length * $self->ins_rate / 100),scalar @insertions);
-  my $nb_del      = min(int($genome_length * $self->del_rate / 100),scalar @deletions);
+  my $nb_sub      = min(int($genome_length * $self->sub_rate),scalar @snps);
+  my $nb_ins      = min(int($genome_length * $self->ins_rate),scalar @insertions);
+  my $nb_del      = min(int($genome_length * $self->del_rate),scalar @deletions);
 
   $self->genome_simulator->addMutation($snps[$_])       for 0..$nb_sub-1;
   $self->genome_simulator->addMutation($insertions[$_]) for 0..$nb_ins-1;
