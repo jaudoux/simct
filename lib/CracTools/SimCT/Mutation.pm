@@ -65,7 +65,7 @@ sub getVCFRecord {
   my $self = shift;
   my %vcf_record = (
     chr => $self->chr,
-    pos => $self->start,
+    pos => $self->start + 1,
     ref => $self->reference_sequence,
     alt => $self->mutation_sequence,
     id  => '.',
