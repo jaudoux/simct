@@ -213,7 +213,7 @@ sub _postProcessSimulation {
   if(keys %mutations) {
     my $mutations_output = File::Spec->catfile($simulation_dir,"mutations.vcf.gz");
     my $mutations_fh     = CracTools::Utils::getWritingFileHandle($mutations_output);
-    foreach my $mut (sort { $a->chr cmp $b->chr && $a->start <=> $b->start } keys %mutations) {
+    foreach my $mut (sort { $a->chr cmp $b->chr || $a->start <=> $b->start } keys %mutations) {
       # Get raw VCF record
       my $vcf_line = $mut->getVCFRecord;
       # Update information with read names and depth
