@@ -131,7 +131,7 @@ sub _postProcessSimulation {
             CracTools::SimCT::GenomicInterval->new(
               chr   => $alignment->chr,
               start => $start,
-              end   => $start + $cigel->nb
+              end   => $start + $cigel->nb - 1
           ));
           $start += $cigel->nb;
         }
