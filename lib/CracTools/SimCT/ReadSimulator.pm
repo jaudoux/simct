@@ -99,8 +99,7 @@ sub _postProcessSimulation {
     my @alignments  = $simulated_genome->liftover->getSplicedAlignments(@intervals);
     my @errors_pos  = $errors_it->();
 
-    my @overlapping_mutations   = $simulated_genome->mutation_query->getOverlappingMutations(@intervals);
-    map { push @{$mutations{$_}}, $nb_reads } @overlapping_mutations;
+    my @overlapping_mutations = ();
 
     # Add splices and/or chimeras (based on alignments)
     my $prev_alignment;
@@ -127,10 +126,17 @@ sub _postProcessSimulation {
         # If this cigar op is reference based, we update
         # the start position
         } elsif($cigel->op =~ /^[MDX=]$/) {
+          # Add overlapping mutations
+          push @overlapping_mutations, $simulated_genome->mutation_query->getOverlappingMutations(
+            CracTools::SimCT::GenomicInterval->new(
+              chr   => $alignment->chr,
+              start => $start,
+              end   => $start + $cigel->nb
+          ));
           $start += $cigel->nb;
         }
       }
-      if(defined $prev_alignment)   {
+      if(defined $prev_alignment) {
         my $chim_key;
         if($read->{reversed}) {
           $chim_key = join("@",
@@ -145,6 +151,9 @@ sub _postProcessSimulation {
       }
       $prev_alignment = $alignment;
     }
+
+    # Add mutation for this read to the main hash
+    map { push @{$mutations{$_}}, $nb_reads } @overlapping_mutations;
 
     $nb_errors += scalar @errors_pos;
 
