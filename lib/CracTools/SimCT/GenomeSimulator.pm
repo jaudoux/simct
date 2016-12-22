@@ -189,11 +189,11 @@ sub generateGenome {
     my $fusion_name = "fusion_$fusion_id";
 
     # Now we print an extra FASTA file with fusions
-    my $fasta_output    = File::Spec->catfile($genome_dir,"$fusion_chr_name.fa");
+    my $fasta_output    = File::Spec->catfile($genome_dir,"$fusion_name.fa");
     my $fasta_output_fh = CracTools::Utils::getWritingFileHandle($fasta_output);
 
     # Print FASTA headers
-    print $fasta_output_fh ">$fusion_chr_name\n";
+    print $fasta_output_fh ">$fusion_name\n";
     # We print the fasta sequence corresponding to the fusion
     CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$fusion->fusion_sequence,0);
 
@@ -206,13 +206,13 @@ sub generateGenome {
     $fusion_annotations->addGene($fusion_gene);
 
     $fusion_id++;
+    close($fasta_output_fh);
   }
 
   # Print fusion annotations
   $fusion_annotations->appendGTF($gtf_output_fh);
 
   # Close outputs
-  close($fasta_output_fh);
   close($gtf_output_fh);
 
   # Return the simulated genome build on the base
