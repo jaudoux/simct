@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 25;
+use Test::More tests => 32;
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Utils;
 use CracTools::SimCT::Genome;
@@ -185,6 +185,22 @@ sub newInterval {
   is($shifted_interval->[1]->start,15,"shiftInterval (1)");
   is($shifted_interval->[1]->end,19,"shiftInterval (2)");
   is($shifted_interval->[1]->strand,'-',"shiftInterval (2)");
+
+  {
+    my @alignments = $sg->liftover->getSplicedAlignments(
+      newInterval("fusion_0",2,9),
+      newInterval("fusion_0",12,17),
+    );
+    is($alignments[0]->chr,1,"chimeric spliced alignment");
+    is($alignments[0]->start,11,"chimeric spliced alignment");
+    is($alignments[0]->cigar,'4M10S',"chimeric spliced alignment");
+    is($alignments[1]->chr,2,"chimeric spliced alignment");
+    is($alignments[1]->start,8,"chimeric spliced alignment");
+    is($alignments[1]->cigar,'6M2N4M4S',"chimeric spliced alignment");
+    is($alignments[1]->strand,'-',"chimeric spliced alignment");
+    use Data::Dumper;
+    print STDERR Dumper(\@alignments);
+  }
 
   # Verify if annotations are good
   my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');

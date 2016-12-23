@@ -29,6 +29,12 @@ has '+end'  => (
   },
 );
 
+has 'query_strand' => (
+  is      => 'rw',
+  isa     => 'Strand',
+  default => '+',
+);
+
 around 'end' => sub {
   my $orig = shift;
   my $self = shift;
