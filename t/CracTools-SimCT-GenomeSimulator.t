@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 50;
+use Test::More tests => 51;
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Utils;
 use CracTools::SimCT::Genome;
@@ -249,7 +249,14 @@ sub newInterval {
     is($second_alignment->cigar,"16S16M");
     is($second_alignment->start,9);
   }
-  # TODO check VCF output
+  # check overlapping mutations
+  {
+    my @mutations = $sg->mutation_query->getOverlappingMutations(
+      newInterval("1",2,5),
+      newInterval("1",7,10),
+    );
+    is(@mutations, 2);
+  }
 }
 
 __CHR1_FASTA__
