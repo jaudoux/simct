@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 62;
+use Test::More tests => 66;
 #use Test::More tests => 4;
 use CracTools::SimCT::LiftOver;
 use CracTools::SimCT::GenomicInterval;
@@ -34,6 +34,7 @@ $liftover->addInterval("chr1",15,18,-5); # 5bp insertion
 $liftover->addInterval("chr1",19,25,+5); # 10bp deletion
 $liftover->addInterval("chr1",26,30,-26,"chr2"); # chimeric alignment
 $liftover->addInterval("chr1",31,40,40,"chr3",1); # chimeric alignment reversed (10 + 26)
+$liftover->addInterval("chr2",0,100,0);
 
 # Overlap of the insertion
 {
@@ -121,16 +122,34 @@ $liftover->addInterval("chr1",31,40,40,"chr3",1); # chimeric alignment reversed 
   is($chimeric_alignment->cigar,"24S5M");
 }
 
+# Check spliced alignement on forward strand
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("chr2",1,5,'+'),newInterval("chr2",10,20,'+'));
+  is($a[0]->chr,"chr2");
+  is($a[0]->start,1);
+  is($a[0]->cigar,"5M4N11M");
+  is($a[0]->strand,'+');
+}
+
+# Check spliced alignement on reverse strand
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("chr2",1,5,'-'),newInterval("chr2",10,20,'-'));
+  is($a[0]->chr,"chr2");
+  is($a[0]->start,1);
+  is($a[0]->cigar,"5M4N11M");
+  is($a[0]->strand,'-');
+}
+
 # Check reverse chimeric alignement query
 {
   my ($chimeric_alignment,$reverse_chimeric_alignment) = $liftover->getAlignments(newInterval("chr1",28,36,'-'));
-  is($chimeric_alignment->chr,"chr2");
-  is($chimeric_alignment->start,2);
-  is($chimeric_alignment->cigar,"3M6S");
-  is($chimeric_alignment->strand,'-');
-  is($reverse_chimeric_alignment->chr,"chr3");
-  is($reverse_chimeric_alignment->strand, '+');
-  is($reverse_chimeric_alignment->start,4);
+  is($chimeric_alignment->chr,"chr3");
+  is($chimeric_alignment->start,4);
+  is($chimeric_alignment->cigar,"6M3S");
+  is($chimeric_alignment->strand,'+');
+  is($reverse_chimeric_alignment->chr,"chr2");
+  is($reverse_chimeric_alignment->strand, '-');
+  is($reverse_chimeric_alignment->start,2);
 }
 
 # Check spliced alignement query
@@ -146,3 +165,21 @@ $liftover->addInterval("chr1",31,40,40,"chr3",1); # chimeric alignment reversed 
   is($chimeric_alignment->start,0);
   is($chimeric_alignment->cigar,"15S5M");
 }
+#
+# Check spliced alignement query
+#{
+#  print STDERR "START\n";
+#  my @a = $liftover->getSplicedAlignments(
+#    newInterval("chr1",2,10,'-'),
+#    newInterval("chr1",20,30,'-'),
+#  );
+#  use Data::Dumper;
+#  print STDERR Dumper(\@a);
+#  is($a[0]->chr,"chr2");
+#  is($a[0]->start,0);
+#  is($a[0]->cigar,"5M15S");
+#  is($a[1]->chr,"chr1");
+#  is($a[1]->start,2);
+#  is($a[1]->cigar,"5S6M15N1M8M8M");
+#}
+

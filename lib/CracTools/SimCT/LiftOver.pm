@@ -134,6 +134,7 @@ sub getAlignments {
     strand  => $first_interval->strand,
     query_length  => $original_interval->length,
     query_mapping_start => $query_mapping_start,
+    query_strand  => $original_interval->strand,
   );
 
   # Append the first interval to the alignment
@@ -194,6 +195,20 @@ sub getAlignments {
     );
     $prev_interval = $shifted_interval;
   }
+
+  # Reverse alignment if original interval was on the "reverse strand"
+  #if($original_interval->strand eq '-' && @alignments >= 2) {
+  #  @alignments = reverse @alignments;
+  #  my $i = 0;
+  #  my $j = @alignments - 1;
+  #  while($i < $j) {
+  #    my $tmp = $alignments[$i]->query_mapping_start;
+  #    $alignments[$i]->query_mapping_start($alignments[$j]->query_mapping_start);
+  #    $alignments[$j]->query_mapping_start($tmp);
+  #    $i++;
+  #    $j--;
+  #  }
+  #}
   return @alignments;
 }
 
@@ -207,10 +222,30 @@ sub getSplicedAlignments {
   my $query_length = 0;
   map { $query_length += $_->length } @intervals;
 
-  # Loop over splices
-  foreach my $interval (@intervals) {
-    # First we get shifted intervals
+  #if($intervals[0]->strand eq '-') {
+  #  @intervals = reverse @intervals; 
+  #}
+
+  my @interval_alignements = ();
+  my $found_chim_al = 0;
+  foreach my $interval(@intervals) {
     my @block_alignments = $self->getAlignments($interval);
+    $found_chim_al = 1 if(@block_alignments > 1);
+    push @interval_alignements, \@block_alignments;
+  } 
+   
+  # FIXME this is a very dirty fix to handle spliced alignement with chimeric junction
+  # It should be fix proprely, because this can caused undefined behaviour
+  #if($intervals[0]->strand eq '-' && $found_chim_al) {
+  #  print STDERR "TOTO\n";
+  #  @interval_alignements = reverse @interval_alignements; 
+  #}
+
+
+  # Loop over splices
+  foreach my $b_al (@interval_alignements) {
+    # First we get shifted intervals
+    my @block_alignments = @{$b_al};
 
     my $prev_alignment = $alignments[$#alignments];
     foreach my $curr_alignment (@block_alignments) {
