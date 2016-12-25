@@ -182,6 +182,7 @@ sub getAlignments {
         strand  => $shifted_interval->strand,
         query_length  => $original_interval->length,
         query_mapping_start => $query_mapping_start,
+        query_strand  => $original_interval->strand,
       );
       push @alignments, $current_alignment;
     }
@@ -213,6 +214,20 @@ sub getSplicedAlignments {
 
     my $prev_alignment = $alignments[$#alignments];
     foreach my $curr_alignment (@block_alignments) {
+
+      # If this alignement belong to a block that have been reversed we need to permute
+      # them to create a splice instead of a chimeric junction
+      if(defined $prev_alignment && $prev_alignment->chr eq $curr_alignment->chr &&
+        $prev_alignment->strand eq $curr_alignment->strand &&
+        $prev_alignment->query_strand eq $curr_alignment->query_strand &&
+        $prev_alignment->strand ne $prev_alignment->query_strand &&
+        $prev_alignment->end >= $curr_alignment->start) {
+        my $tmp = pop @alignments;
+        $prev_alignment = $curr_alignment;
+        $curr_alignment = $tmp;
+        push @alignments, $prev_alignment;
+      }
+
       # If it is not the first alignment we look for a splice
       # alignement
       if(defined $prev_alignment &&

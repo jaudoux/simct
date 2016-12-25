@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 9;
+use Test::More tests => 11;
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Genome;
 use CracTools::SimCT::Fusion;
@@ -93,19 +93,33 @@ my $sg = $gs->generateGenome(
   annotations => $annotations,
 );
 
-my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/$CracTools::SimCT::Const::CHR_FUSIONS.fa");
-my $entry     = $fasta_it->();
+{
+  my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/fusion_0.fa");
+  my $entry     = $fasta_it->();
 
+  # CTAGCTAGTTAGCTCGATCGGC => GCCGATCGAGCTAACTAGCTAG
+  # lenght: 49
+  my $fusion_1 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(GCCGATCGAGCTAACTAGCTAG)";
+  ok($entry->{seq} =~ /^$fusion_1$/,"generategenome - fasta control (1)");
+}
 
-# CTAGCTAGTTAGCTCGATCGGC => GCCGATCGAGCTAACTAGCTAG
-# lenght: 49
-my $fusion_1 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(GCCGATCGAGCTAACTAGCTAG)";
-# GATCGGC => GCCGATC
-# length: 24
-my $fusion_2 = "(GCCGATC)(CGTCGCATGTCGAAAGT)";
-# length: 47
-my $fusion_3 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(ACCCGTCGCATGTCGAAAGT)";
-ok($entry->{seq} =~ /^($fusion_1)($fusion_2)($fusion_3)$/,"generateGenome - FASTA control (2)");
+{
+  my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/fusion_1.fa");
+  my $entry     = $fasta_it->();
+  # GATCGGC => GCCGATC
+  # length: 24
+  my $fusion_2 = "(GCCGATC)(CGTCGCATGTCGAAAGT)";
+  ok($entry->{seq} =~ /^$fusion_2$/,"generategenome - fasta control (2)");
+}
+
+{
+  my $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/fusion_2.fa");
+  my $entry     = $fasta_it->();
+  # length: 47
+  my $fusion_3 = "(TGGTAGTACCCGTCGCATGTCGAAAGT)(ACCCGTCGCATGTCGAAAGT)";
+  ok($entry->{seq} =~ /^$fusion_3$/,"generategenome - fasta control (3)");
+}
+
 
 my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');
 

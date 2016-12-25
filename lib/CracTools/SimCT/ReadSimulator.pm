@@ -94,6 +94,12 @@ sub _postProcessSimulation {
   # and error positions as the read_name
   while (my $read = $seq_it->()) {
 
+    # Set the read id
+    my $read_id = $nb_reads;
+    if($simulation->isPairedEnd) {
+      $read_id = ($nb_reads % 2 == 0)? $nb_reads / 2 : ($nb_reads - 1) / 2;
+    }
+
     # TODO add some hooks for subclasses
     my @intervals   = $intervals_it->();
     my @alignments  = $simulated_genome->liftover->getSplicedAlignments(@intervals);
@@ -115,12 +121,12 @@ sub _postProcessSimulation {
           if($cigel->nb <= $CracTools::SimCT::Const::MAX_SPLICE_LENGTH) {
             my $splice_key = join("@", $alignment->chr, $start,
               $start + $cigel->nb, $real_strand);
-            push @{$splices{$splice_key}},$nb_reads;
+            push @{$splices{$splice_key}},$read_id;
           # Splice is larger than MAX_SPLICE_LENGTH, then it is a class2 chimera
           } else {
             my $chim_key = join('@', $alignment->chr, $start, $real_strand,
               $alignment->chr, $start + $cigel->nb, $real_strand);
-            push @{$chimeras{$chim_key}},$nb_reads;
+            push @{$chimeras{$chim_key}},$read_id;
           }
           $start += $cigel->nb;
         # If this cigar op is reference based, we update
@@ -147,13 +153,13 @@ sub _postProcessSimulation {
             $prev_alignment->chr, $prev_alignment->start, $prev_alignment->strand,
             $alignment->chr, $alignment->start, $alignment->strand);
         }
-        push @{$chimeras{$chim_key}},$nb_reads;
+        push @{$chimeras{$chim_key}},$read_id;
       }
       $prev_alignment = $alignment;
     }
 
     # Add mutation for this read to the main hash
-    map { push @{$mutations{$_}}, $nb_reads } @overlapping_mutations;
+    map { push @{$mutations{$_}}, $read_id } @overlapping_mutations;
 
     $nb_errors += scalar @errors_pos;
 
@@ -178,7 +184,6 @@ sub _postProcessSimulation {
         my @sorted_uniq_errors = do { my %seen; grep { !$seen{$_}++ } sort @errors_pos };
 
         # Encode the read name
-        my $read_id   = ($nb_reads - 1) / 2;
         my $read_name = $self->disable_error_encoding?
           _getReadName($read_id, \@alignments) :
           _getReadName($read_id, \@alignments, \@sorted_uniq_errors);
@@ -192,11 +197,6 @@ sub _postProcessSimulation {
     } else {
       # Get the right filehandle
       my $fh = ($nb_reads % 2 == 0) || !$simulation->isPairedEnd? $fastq1_output_fh : $fastq2_output_fh;
-      # Set the read id
-      my $read_id = $nb_reads;
-      if($simulation->isPairedEnd) {
-        $read_id = ($nb_reads % 2 == 0)? $nb_reads / 2 : ($nb_reads - 1) / 2;
-      }
       # Write the seq to the output file
       CracTools::Utils::writeSeq($fh,'fastq',
         $self->disable_error_encoding?

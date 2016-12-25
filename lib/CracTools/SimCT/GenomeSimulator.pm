@@ -178,43 +178,41 @@ sub generateGenome {
   # Print liftover annotations
   $annotations->appendGTF($gtf_output_fh,$annot_lifter);
 
-  # Now we print an extra FASTA file with fusions
-  my $fasta_output    = File::Spec->catfile($genome_dir,"$CracTools::SimCT::Const::CHR_FUSIONS.fa");
-  my $fasta_output_fh = CracTools::Utils::getWritingFileHandle($fasta_output);
 
-  # Print FASTA headers
-  print $fasta_output_fh ">$CracTools::SimCT::Const::CHR_FUSIONS\n";
-
-  my $remainder       = 0;
-  my $fusion_id       = 0;
-  my $chr_fusion_start  = 0;
+  my $fusion_id = 0;
 
   # Create a new annotation set for fusions
   my $fusion_annotations = CracTools::SimCT::Annotations->new();
 
   foreach my $fusion ($self->allFusions) {
+
+    my $fusion_name = "fusion_$fusion_id";
+
+    # Now we print an extra FASTA file with fusions
+    my $fasta_output    = File::Spec->catfile($genome_dir,"$fusion_name.fa");
+    my $fasta_output_fh = CracTools::Utils::getWritingFileHandle($fasta_output);
+
+    # Print FASTA headers
+    print $fasta_output_fh ">$fusion_name\n";
     # We print the fasta sequence corresponding to the fusion
-    $remainder = CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$fusion->fusion_sequence,$remainder);
+    CracTools::SimCT::Utils::printFASTA($fasta_output_fh,$fusion->fusion_sequence,0);
 
     # Get the new genes and add it to the annotations
     my $fusion_gene = $fusion->getFusionGene(
-      "fusion_".$fusion_id,
-      $CracTools::SimCT::Const::CHR_FUSIONS,
-      $chr_fusion_start,
+      $fusion_name,
+      $fusion_name,
+      0,
     );
     $fusion_annotations->addGene($fusion_gene);
 
-    # Update the fusion start for the next fusion
-    $chr_fusion_start += length $fusion->fusion_sequence;
     $fusion_id++;
-
+    close($fasta_output_fh);
   }
 
   # Print fusion annotations
   $fusion_annotations->appendGTF($gtf_output_fh);
 
   # Close outputs
-  close($fasta_output_fh);
   close($gtf_output_fh);
 
   # Return the simulated genome build on the base

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 51;
+use Test::More tests => 33;
 use CracTools::SimCT::Const;
 use CracTools::SimCT::Utils;
 use CracTools::SimCT::Genome;
@@ -144,17 +144,29 @@ sub newInterval {
   my $entry     = $fasta_it->();
   is($entry->{seq},"ATAGGGGTAGTACGCGTCAGTCT","generateGenome - FASTA control (1)");
 
-  $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/$CracTools::SimCT::Const::CHR_FUSIONS.fa");
-  $entry     = $fasta_it->();
-  # GeneA, exon1: CCCGTC
-  # GeneB, exon1-exon2: GCTAGTTAGCTCGATC => GATCGAGCTAACTAGC
-  my $fusion_1 = "CCCGTCGATCGAGCTAACTAGC";
-  ok($entry->{seq} =~ /^$fusion_1/,"generateGenome - FASTA control (2)");
-  # Check second fusion
-  my $fusion_2 = "(CCCGTCGCATGTCGAA){2}";
-  ok($entry->{seq} =~ /^($fusion_1)($fusion_2)/,"fusion sequence");
-  my $fusion_3 = "GATCGAGCTAACTAGCCCCGTCGCATGTCGAA";
-  ok($entry->{seq} =~ /^($fusion_1)($fusion_2)($fusion_3)/,"fusion sequence");
+  {
+    $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/fusion_0.fa");
+    $entry     = $fasta_it->();
+    # GeneA, exon1: CCCGTC
+    # GeneB, exon1-exon2: GCTAGTTAGCTCGATC => GATCGAGCTAACTAGC
+    my $fusion_1 = "CCCGTCGATCGAGCTAACTAGC";
+    ok($entry->{seq} =~ /^$fusion_1$/,"generateGenome - FASTA control (2)");
+  }
+  {
+    $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/fusion_1.fa");
+    $entry     = $fasta_it->();
+    # GeneA, exon1: CCCGTC
+    # GeneB, exon1-exon2: GCTAGTTAGCTCGATC => GATCGAGCTAACTAGC
+    my $fusion_2 = "(CCCGTCGCATGTCGAA){2}";
+    ok($entry->{seq} =~ /^$fusion_2$/,"generateGenome - FASTA control (3)");
+  }
+  {
+    $fasta_it  = CracTools::Utils::seqFileIterator("$genome_dir/fusion_2.fa");
+    $entry     = $fasta_it->();
+    # Check second fusion
+    my $fusion_3 = "GATCGAGCTAACTAGCCCCGTCGCATGTCGAA";
+    ok($entry->{seq} =~ /^$fusion_3$/,"generateGenome - FASTA control (4)");
+  }
 
   # Verify liftover functions
   my $shifted_interval = $sg->liftover->shiftInterval(newInterval("1",15,20));
@@ -164,7 +176,7 @@ sub newInterval {
   is($shifted_interval->[1]->end,27,"shiftInterval (4)");
 
   # Verify liftover functions for fusions
-  $shifted_interval = $sg->liftover->shiftInterval(newInterval("Fusions",2,10));
+  $shifted_interval = $sg->liftover->shiftInterval(newInterval("fusion_0",2,10));
   is($shifted_interval->[0]->chr,1,"shiftInterval (1)");
   is($shifted_interval->[0]->start,11,"shiftInterval (1)");
   is($shifted_interval->[0]->end,14,"shiftInterval (2)");
@@ -173,6 +185,22 @@ sub newInterval {
   is($shifted_interval->[1]->start,15,"shiftInterval (1)");
   is($shifted_interval->[1]->end,19,"shiftInterval (2)");
   is($shifted_interval->[1]->strand,'-',"shiftInterval (2)");
+
+  {
+    my @alignments = $sg->liftover->getSplicedAlignments(
+      newInterval("fusion_0",2,9),
+      newInterval("fusion_0",12,17),
+    );
+    is($alignments[0]->chr,1,"chimeric spliced alignment");
+    is($alignments[0]->start,11,"chimeric spliced alignment");
+    is($alignments[0]->cigar,'4M10S',"chimeric spliced alignment");
+    is($alignments[1]->chr,2,"chimeric spliced alignment");
+    is($alignments[1]->start,8,"chimeric spliced alignment");
+    is($alignments[1]->cigar,'6M2N4M4S',"chimeric spliced alignment");
+    is($alignments[1]->strand,'-',"chimeric spliced alignment");
+    use Data::Dumper;
+    print STDERR Dumper(\@alignments);
+  }
 
   # Verify if annotations are good
   my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');
@@ -187,68 +215,13 @@ sub newInterval {
   {
     my $fusion_exon_1   = $gtf_it->();
     my $fusion_exon_2   = $gtf_it->();
+    is($fusion_exon_1->{chr},"fusion_0");
     is($fusion_exon_1->{start},1);
     is($fusion_exon_1->{end},12);
     is($fusion_exon_2->{start},17);
     is($fusion_exon_2->{end},22);
   }
-  # Check the second fusion
-  {
-    my $fusion_exon_1   = $gtf_it->();
-    my $fusion_exon_2   = $gtf_it->();
-    my $fusion_exon_3   = $gtf_it->();
-    is($fusion_exon_1->{start},23);
-    is($fusion_exon_1->{end},28);
-    is($fusion_exon_2->{start},33);
-    is($fusion_exon_2->{end},44);
-    is($fusion_exon_3->{start},49);
-    is($fusion_exon_3->{end},54);
-  }
-  # Check the third fusion
-  {
-    my $fusion_exon_1   = $gtf_it->();
-    my $fusion_exon_2   = $gtf_it->();
-    my $fusion_exon_3   = $gtf_it->();
-    is($fusion_exon_1->{start},55);
-    is($fusion_exon_1->{end},60);
-    is($fusion_exon_2->{start},65);
-    is($fusion_exon_2->{end},76);
-    is($fusion_exon_3->{start},81);
-    is($fusion_exon_3->{end},86);
-  }
-  # Check the false fusion
-  {
-    my $fusion_exon_1   = $gtf_it->();
-    is($fusion_exon_1->{start},87);
-    is($fusion_exon_1->{end},98);
-    my @alignments = $sg->liftover->getAlignments(
-      newInterval($CracTools::SimCT::Const::CHR_FUSIONS,86,97)
-    );
-    my $alignment = shift @alignments;
-    is($alignment->cigar,"6M4D6M");
-    is($alignment->start,9);
-  }
-  # Check the class 3 fusion
-  {
-    my $fusion_exon_1   = $gtf_it->();
-    my $fusion_exon_2   = $gtf_it->(); # Fused exon
-    my $fusion_exon_3   = $gtf_it->();
-    is($fusion_exon_1->{start},99);
-    is($fusion_exon_1->{end},104);
-    is($fusion_exon_2->{start},109);
-    is($fusion_exon_2->{end},120);
-    is($fusion_exon_3->{start},125);
-    is($fusion_exon_3->{end},130);
-    my @alignments = $sg->liftover->getAlignments(
-      newInterval($CracTools::SimCT::Const::CHR_FUSIONS,98,129)
-    );
-    my $first_alignment = shift @alignments;
-    is($first_alignment->cigar,"16M16S");
-    is($first_alignment->start,9);
-    my $second_alignment = shift @alignments;
-    is($second_alignment->cigar,"16S16M");
-    is($second_alignment->start,9);
-  }
+
   # check overlapping mutations
   {
     my @mutations = $sg->mutation_query->getOverlappingMutations(
