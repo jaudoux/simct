@@ -147,11 +147,13 @@ sub _postProcessSimulation {
 
         $chim_key = join("@",
           $prev_alignment->chr,
-          $real_strand ne $prev_alignment->strand? $prev_alignment->start : $prev_alignment->end,
-          $real_strand ne $prev_alignment->strand? $prev_alignment->strand : $real_strand,
+          #$prev_alignment->strand eq '-' ? $prev_alignment->start : $prev_alignment->end,
+          $real_strand ne $prev_alignment->strand ? $prev_alignment->start : $prev_alignment->end,
+          $real_strand ne $prev_alignment->strand ? $prev_alignment->strand : $real_strand,
           $alignment->chr,
-          $real_strand ne $alignment->strand? $alignment->start : $alignment->end,
-          $real_strand ne $alignment->strand? $alignment->strand : $real_strand);
+          #$alignment->strand eq '-' ? $alignment->end : $alignment->start,
+          $real_strand ne $alignment->strand ? $alignment->end : $alignment->start,
+          $real_strand ne $alignment->strand ? $alignment->strand : $real_strand);
 
         # if($read->{reversed}) {
         #   $chim_key = join("@",
