@@ -71,9 +71,9 @@ sub getSequenceIterator {
     my $read = $seq_it->();
     if(defined $read) {
       if($self->isPairedEnd && $read_id % 2 == 0) {
-        $read->{reversed} = 1;
-      } else {
         $read->{reversed} = undef;
+      } else {
+        $read->{reversed} = 1;
       }
       $read->{read_id} = $read_id;
       $read_id++;

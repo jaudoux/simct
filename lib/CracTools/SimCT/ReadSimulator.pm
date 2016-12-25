@@ -147,10 +147,10 @@ sub _postProcessSimulation {
         if($read->{reversed}) {
           $chim_key = join("@",
             $alignment->chr, $alignment->start, $alignment->strand eq '+'? '-' : '+',
-            $prev_alignment->chr, $prev_alignment->start, $prev_alignment->strand eq '+'? '-' : '+');
+            $prev_alignment->chr, $prev_alignment->end, $prev_alignment->strand eq '+'? '-' : '+');
         } else {
           $chim_key = join("@",
-            $prev_alignment->chr, $prev_alignment->start, $prev_alignment->strand,
+            $prev_alignment->chr, $prev_alignment->end, $prev_alignment->strand,
             $alignment->chr, $alignment->start, $alignment->strand);
         }
         push @{$chimeras{$chim_key}},$read_id;
