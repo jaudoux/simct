@@ -111,7 +111,7 @@ sub _postProcessSimulation {
     my $prev_alignment;
     foreach my $alignment (@alignments) {
       my $start = $alignment->start;
-      my $real_strand = $alignment->{strand};
+      my $real_strand = $alignment->strand;
       if($read->{reversed}) {
         $real_strand = $alignment->strand eq '+'? '-' : '+';
       }
@@ -144,15 +144,24 @@ sub _postProcessSimulation {
       }
       if(defined $prev_alignment) {
         my $chim_key;
-        if($read->{reversed}) {
-          $chim_key = join("@",
-            $alignment->chr, $alignment->start, $alignment->strand eq '+'? '-' : '+',
-            $prev_alignment->chr, $prev_alignment->end, $prev_alignment->strand eq '+'? '-' : '+');
-        } else {
-          $chim_key = join("@",
-            $prev_alignment->chr, $prev_alignment->end, $prev_alignment->strand,
-            $alignment->chr, $alignment->start, $alignment->strand);
-        }
+
+        $chim_key = join("@",
+          $prev_alignment->chr,
+          $real_strand ne $prev_alignment->strand? $prev_alignment->start : $prev_alignment->end,
+          $real_strand ne $prev_alignment->strand? $prev_alignment->strand : $real_strand,
+          $alignment->chr,
+          $real_strand ne $alignment->strand? $alignment->start : $alignment->end,
+          $real_strand ne $alignment->strand? $alignment->strand : $real_strand);
+
+        # if($read->{reversed}) {
+        #   $chim_key = join("@",
+        #     $alignment->chr, $alignment->start, $alignment->strand eq '+'? '-' : '+',
+        #     $prev_alignment->chr, $prev_alignment->end, $prev_alignment->strand eq '+'? '-' : '+');
+        # } else {
+        #   $chim_key = join("@",
+        #     $prev_alignment->chr, $prev_alignment->end, $prev_alignment->strand,
+        #     $alignment->chr, $alignment->start, $alignment->strand);
+        # }
         push @{$chimeras{$chim_key}},$read_id;
       }
       $prev_alignment = $alignment;

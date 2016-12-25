@@ -199,46 +199,6 @@ sub newInterval {
     is($alignments[1]->cigar,'6M2N4M4S',"chimeric spliced alignment");
     is($alignments[1]->strand,'-',"chimeric spliced alignment");
   }
-  {
-    my @alignments = $sg->liftover->getSplicedAlignments(
-      newInterval("fusion_0",2,9,'-'),
-      newInterval("fusion_0",12,17,'-'),
-    );
-    #use Data::Dumper;
-    #print STDERR Dumper(\@alignments);
-    is($alignments[0]->chr,2,"chimeric spliced alignment");
-    is($alignments[0]->start,8,"chimeric spliced alignment");
-    is($alignments[0]->cigar,'6M2N4M4S',"chimeric spliced alignment");
-    is($alignments[0]->strand,'+',"chimeric spliced alignment");
-    is($alignments[1]->chr,1,"chimeric spliced alignment");
-    is($alignments[1]->start,11,"chimeric spliced alignment");
-    is($alignments[1]->cigar,'10S4M',"chimeric spliced alignment");
-    is($alignments[1]->strand,'-',"chimeric spliced alignment");
-  }
-  {
-    my @alignments = $sg->liftover->getSplicedAlignments(
-      newInterval("fusion_0",2,10,'+'),
-    );
-    is($alignments[0]->chr,1,"chimeric spliced alignment");
-    is($alignments[0]->start,11,"chimeric spliced alignment");
-    is($alignments[0]->cigar,'4M5S',"chimeric spliced alignment");
-    is($alignments[1]->chr,2,"chimeric spliced alignment");
-    is($alignments[1]->start,15,"chimeric spliced alignment");
-    is($alignments[1]->cigar,'4S5M',"chimeric spliced alignment");
-    is($alignments[1]->strand,'-',"chimeric spliced alignment");
-  }
-  {
-    my @alignments = $sg->liftover->getSplicedAlignments(
-      newInterval("fusion_0",2,10,'-'),
-    );
-    is($alignments[0]->chr,2,"chimeric spliced alignment");
-    is($alignments[0]->start,15,"chimeric spliced alignment");
-    is($alignments[0]->cigar,'5M4S',"chimeric spliced alignment");
-    is($alignments[0]->strand,'+',"chimeric spliced alignment");
-    is($alignments[1]->chr,1,"chimeric spliced alignment");
-    is($alignments[1]->start,11,"chimeric spliced alignment");
-    is($alignments[1]->cigar,'5S4M',"chimeric spliced alignment");
-  }
 
   # Verify if annotations are good
   my $gtf_it        = CracTools::Utils::gffFileIterator("$genome_dir/annotations.gtf",'gtf');
