@@ -123,7 +123,7 @@ sub getAlignments {
 
   # If there is no shifted intervals, we return an empty array
   return () if !@shifted_intervals;
-  
+
   my $first_interval = shift @shifted_intervals;
 
   # Create a first alignement object
@@ -236,10 +236,6 @@ sub getSplicedAlignments {
   my $query_length = 0;
   map { $query_length += $_->length } @intervals;
 
-  #if($intervals[0]->strand eq '-') {
-  #  @intervals = reverse @intervals;
-  #}
-
   my @interval_alignements = ();
   my $found_chim_al = 0;
   foreach my $interval(@intervals) {
@@ -247,14 +243,6 @@ sub getSplicedAlignments {
     $found_chim_al = 1 if(@block_alignments > 1);
     push @interval_alignements, \@block_alignments;
   }
-
-  # FIXME this is a very dirty fix to handle spliced alignement with chimeric junction
-  # It should be fix proprely, because this can caused undefined behaviour
-  #if($intervals[0]->strand eq '-' && $found_chim_al) {
-  #  print STDERR "TOTO\n";
-  #  @interval_alignements = reverse @interval_alignements;
-  #}
-
 
   # Loop over splices
   foreach my $b_al (@interval_alignements) {
@@ -264,25 +252,28 @@ sub getSplicedAlignments {
     my $prev_alignment = $alignments[$#alignments];
     foreach my $curr_alignment (@block_alignments) {
 
-      # If this alignement belong to a block that have been reversed we need to permute
-      # them to create a splice instead of a chimeric junction
-      if(defined $prev_alignment && $prev_alignment->chr eq $curr_alignment->chr &&
-        $prev_alignment->strand eq $curr_alignment->strand &&
-        $prev_alignment->query_strand eq $curr_alignment->query_strand &&
-        $prev_alignment->strand ne $prev_alignment->query_strand &&
-        $prev_alignment->end >= $curr_alignment->start) {
-        my $tmp = pop @alignments;
-        $prev_alignment = $curr_alignment;
-        $curr_alignment = $tmp;
-        push @alignments, $prev_alignment;
-      }
-
       # If it is not the first alignment we look for a splice
       # alignement
       if(defined $prev_alignment &&
         $prev_alignment->chr eq $curr_alignment->chr &&
         $prev_alignment->strand eq $curr_alignment->strand &&
-        $prev_alignment->end < $curr_alignment->start) {
+        (($prev_alignment->strand eq $prev_alignment->query_strand &&
+        $prev_alignment->end < $curr_alignment->start) ||
+        ($prev_alignment->strand ne $prev_alignment->query_strand &&
+        $prev_alignment->end > $curr_alignment->start))) {
+
+        my $splice_length;
+        if($prev_alignment->strand eq $prev_alignment->query_strand) {
+          $splice_length = $curr_alignment->start - $prev_alignment->end - 1;
+        } else {
+          $splice_length = $prev_alignment->start - $curr_alignment->end - 1;
+          # If this alignement belong to a block that have been reversed we need to permute
+          # them to create the spliced alignment
+          my $tmp = pop @alignments;
+          $prev_alignment = $curr_alignment;
+          $curr_alignment = $tmp;
+          push @alignments, $prev_alignment;
+        }
 
         # We merge two alignments, we need to transform the softclips into insertions
         if($prev_alignment->right_softclip > 0) {
@@ -293,7 +284,7 @@ sub getSplicedAlignments {
         }
         # Regular spliced alignment
         # We can merge the two alignments
-        my $splice_length  = $curr_alignment->start - $prev_alignment->end - 1;
+        #my $splice_length  = $curr_alignment->start - $prev_alignment->end - 1;
         $prev_alignment->appendCigarElement(CracTools::SimCT::Alignment::CigarElement->new(
           op => 'N',
           nb => $splice_length,

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 121;
+use Test::More tests => 125;
 #use Test::More tests => 4;
 use CracTools::SimCT::LiftOver;
 use CracTools::SimCT::GenomicInterval;
@@ -255,11 +255,38 @@ $liftover->addInterval("fusion_3",50,100,250,"chr1",1); # Start at chr1 pos 0
   is($a[1]->cigar, '25S25M');
 }
 
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("fusion_3",25,40,'+'), newInterval("fusion_3",60,75,'+'));
+  is(scalar @a, 2);
+}
+
 # reverse splice fusion simulation
 $liftover->addInterval("fusion_4",0,49,250,"chr1",1); # Start at chr1 pos 50
 $liftover->addInterval("fusion_4",50,100,100,"chr1",1); # Start at chr1 pos 0
 {
-  my @a = $liftover->getAlignments(newInterval("fusion_4",25,74,'+'));
+  my @a = $liftover->getAlignments(newInterval("fusion_4",25,74,'-'));
   is(scalar @a, 1);
   is($a[0]->cigar, '25M198N25M');
+}
+
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("fusion_4",25,40,'+'), newInterval("fusion_4",60,75,'+'));
+  is(scalar @a, 1);
+}
+
+
+# Class 3 fusion
+$liftover->addInterval("fusion_5",0,49,250,"chr1",1); # Start at chr1 pos 0
+$liftover->addInterval("fusion_5",50,100,-50,"chr1"); # Start at chr2 pos 0
+{
+  my @a = $liftover->getAlignments(newInterval("fusion_5",25,74,'-'));
+  is(scalar @a, 2);
+}
+
+# Class 3 fusion
+$liftover->addInterval("fusion_6",0,49,49,"chr1",1); # Start at chr1 pos 0
+$liftover->addInterval("fusion_6",50,100,250,"chr1"); # Start at chr2 pos 0
+{
+  my @a = $liftover->getAlignments(newInterval("fusion_6",25,74,'-'));
+  is(scalar @a, 2);
 }
