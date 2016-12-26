@@ -123,7 +123,7 @@ sub getAlignments {
 
   # If there is no shifted intervals, we return an empty array
   return () if !@shifted_intervals;
-
+  
   my $first_interval = shift @shifted_intervals;
 
   # Create a first alignement object
@@ -154,22 +154,36 @@ sub getAlignments {
     # we only update the block_start according to the line start
     if($prev_interval->chr eq $shifted_interval->chr &&
       $prev_interval->strand eq $shifted_interval->strand &&
-      $prev_interval->end < $shifted_interval->start) {
+      (($prev_interval->strand eq $prev_interval->reference_interval->strand &&
+      $prev_interval->end < $shifted_interval->start) ||
+      ($prev_interval->strand ne $prev_interval->reference_interval->strand &&
+      $prev_interval->end > $shifted_interval->start))){
+
+      my $del_length;
+      my $ins_length;
+      if($prev_interval->strand ne $prev_interval->reference_interval->strand) {
+        $del_length = $prev_interval->end - $shifted_interval->start - 1;
+        $ins_length = $prev_interval->reference_interval->end - $shifted_interval->reference_interval->start - 1;
+      } else {
+        $del_length = $shifted_interval->start - $prev_interval->end - 1;
+        $ins_length = $shifted_interval->reference_interval->start - $prev_interval->reference_interval->end - 1;
+      }
+
       # We have a deletion in the genome we update the cigar with an insertion
-      if($shifted_interval->start > ($prev_interval->end + 1)) {
+      if($del_length > 0) {
         $current_alignment->appendCigarElement(
           CracTools::SimCT::Alignment::CigarElement->new(
-            op => 'D',
-            nb => $shifted_interval->start - $prev_interval->end - 1,
+            op => ($del_length > $CracTools::SimCT::Const::MAX_DEL ? 'N' : 'D'),
+            nb => $del_length,
           ),
         );
       }
       # We have an insertion in the genome we update the cigar with a deletion
-      if($shifted_interval->reference_interval->start > ($prev_interval->reference_interval->end+1)) {
+      if($ins_length > 0) {
         $current_alignment->appendCigarElement(
           CracTools::SimCT::Alignment::CigarElement->new(
             op => 'I',
-            nb => $shifted_interval->reference_interval->start - $prev_interval->reference_interval->end - 1,
+            nb => $ins_length,
           ),
         );
       }
@@ -223,7 +237,7 @@ sub getSplicedAlignments {
   map { $query_length += $_->length } @intervals;
 
   #if($intervals[0]->strand eq '-') {
-  #  @intervals = reverse @intervals; 
+  #  @intervals = reverse @intervals;
   #}
 
   my @interval_alignements = ();
@@ -232,13 +246,13 @@ sub getSplicedAlignments {
     my @block_alignments = $self->getAlignments($interval);
     $found_chim_al = 1 if(@block_alignments > 1);
     push @interval_alignements, \@block_alignments;
-  } 
-   
+  }
+
   # FIXME this is a very dirty fix to handle spliced alignement with chimeric junction
   # It should be fix proprely, because this can caused undefined behaviour
   #if($intervals[0]->strand eq '-' && $found_chim_al) {
   #  print STDERR "TOTO\n";
-  #  @interval_alignements = reverse @interval_alignements; 
+  #  @interval_alignements = reverse @interval_alignements;
   #}
 
 

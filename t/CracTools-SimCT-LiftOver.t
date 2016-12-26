@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 113;
+use Test::More tests => 121;
 #use Test::More tests => 4;
 use CracTools::SimCT::LiftOver;
 use CracTools::SimCT::GenomicInterval;
@@ -242,45 +242,24 @@ $liftover->addInterval("fusion_2",50,100,100,"chr2",1); # Start at chr2 pos 0
   is($a[1]->cigar, '25S25M');
 }
 
-# # Check reverse chimeric alignement query
-# {
-#   my ($chimeric_alignment,$reverse_chimeric_alignment) = $liftover->getAlignments(newInterval("chr1",28,36,'-'));
-#   is($chimeric_alignment->chr,"chr3");
-#   is($chimeric_alignment->start,4);
-#   is($chimeric_alignment->cigar,"6M3S");
-#   is($chimeric_alignment->strand,'+');
-#   is($reverse_chimeric_alignment->chr,"chr2");
-#   is($reverse_chimeric_alignment->strand, '-');
-#   is($reverse_chimeric_alignment->start,2);
-# }
-#
-# # Check spliced alignement query
-# {
-#   my ($alignment,$chimeric_alignment) = $liftover->getSplicedAlignments(
-#     newInterval("chr1",2,10),
-#     newInterval("chr1",20,30),
-#   );
-#   is($alignment->chr,"chr1");
-#   is($alignment->start,2);
-#   is($alignment->cigar,"8M1I15N6M5S");
-#   is($chimeric_alignment->chr,"chr2");
-#   is($chimeric_alignment->start,0);
-#   is($chimeric_alignment->cigar,"15S5M");
-# }
-#
-# Check spliced alignement query
-#{
-#  print STDERR "START\n";
-#  my @a = $liftover->getSplicedAlignments(
-#    newInterval("chr1",2,10,'-'),
-#    newInterval("chr1",20,30,'-'),
-#  );
-#  use Data::Dumper;
-#  print STDERR Dumper(\@a);
-#  is($a[0]->chr,"chr2");
-#  is($a[0]->start,0);
-#  is($a[0]->cigar,"5M15S");
-#  is($a[1]->chr,"chr1");
-#  is($a[1]->start,2);
-#  is($a[1]->cigar,"5S6M15N1M8M8M");
-#}
+# class3 fusion simulation
+$liftover->addInterval("fusion_3",0,49,49,"chr1",1); # Start at chr1 pos 50
+$liftover->addInterval("fusion_3",50,100,250,"chr1",1); # Start at chr1 pos 0
+{
+  my @a = $liftover->getAlignments(newInterval("fusion_3",25,74,'+'));
+  is($a[0]->start, 0);
+  is($a[0]->strand, '-');
+  is($a[0]->cigar, '25M25S');
+  is($a[1]->start, 176);
+  is($a[1]->strand, '-');
+  is($a[1]->cigar, '25S25M');
+}
+
+# reverse splice fusion simulation
+$liftover->addInterval("fusion_4",0,49,250,"chr1",1); # Start at chr1 pos 50
+$liftover->addInterval("fusion_4",50,100,100,"chr1",1); # Start at chr1 pos 0
+{
+  my @a = $liftover->getAlignments(newInterval("fusion_4",25,74,'+'));
+  is(scalar @a, 1);
+  is($a[0]->cigar, '25M198N25M');
+}
