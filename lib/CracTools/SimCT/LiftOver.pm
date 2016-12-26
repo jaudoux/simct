@@ -124,6 +124,9 @@ sub getAlignments {
   # If there is no shifted intervals, we return an empty array
   return () if !@shifted_intervals;
 
+  # use Data::Dumper;
+  # print STDERR Dumper(\@shifted_intervals);
+
   my $first_interval = shift @shifted_intervals;
 
   # Create a first alignement object
@@ -164,28 +167,45 @@ sub getAlignments {
       if($prev_interval->strand ne $prev_interval->reference_interval->strand) {
         $del_length = $prev_interval->end - $shifted_interval->start - 1;
         $ins_length = $prev_interval->reference_interval->end - $shifted_interval->reference_interval->start - 1;
+        # We have a deletion in the genome we update the cigar with an insertion
+        if($del_length > 0) {
+          $current_alignment->prependCigarElement(
+            CracTools::SimCT::Alignment::CigarElement->new(
+              op => ($del_length > $CracTools::SimCT::Const::MAX_DEL ? 'N' : 'D'),
+              nb => $del_length,
+            ),
+          );
+        }
+        # We have an insertion in the genome we update the cigar with a deletion
+        if($ins_length > 0) {
+          $current_alignment->prependCigarElement(
+            CracTools::SimCT::Alignment::CigarElement->new(
+              op => 'I',
+              nb => $ins_length,
+            ),
+          );
+        }
       } else {
         $del_length = $shifted_interval->start - $prev_interval->end - 1;
         $ins_length = $shifted_interval->reference_interval->start - $prev_interval->reference_interval->end - 1;
-      }
-
-      # We have a deletion in the genome we update the cigar with an insertion
-      if($del_length > 0) {
-        $current_alignment->appendCigarElement(
-          CracTools::SimCT::Alignment::CigarElement->new(
-            op => ($del_length > $CracTools::SimCT::Const::MAX_DEL ? 'N' : 'D'),
-            nb => $del_length,
-          ),
-        );
-      }
-      # We have an insertion in the genome we update the cigar with a deletion
-      if($ins_length > 0) {
-        $current_alignment->appendCigarElement(
-          CracTools::SimCT::Alignment::CigarElement->new(
-            op => 'I',
-            nb => $ins_length,
-          ),
-        );
+        # We have a deletion in the genome we update the cigar with an insertion
+        if($del_length > 0) {
+          $current_alignment->appendCigarElement(
+            CracTools::SimCT::Alignment::CigarElement->new(
+              op => ($del_length > $CracTools::SimCT::Const::MAX_DEL ? 'N' : 'D'),
+              nb => $del_length,
+            ),
+          );
+        }
+        # We have an insertion in the genome we update the cigar with a deletion
+        if($ins_length > 0) {
+          $current_alignment->appendCigarElement(
+            CracTools::SimCT::Alignment::CigarElement->new(
+              op => 'I',
+              nb => $ins_length,
+            ),
+          );
+        }
       }
     # Otherwise it is a chimeric alignment
     } else {
@@ -201,28 +221,26 @@ sub getAlignments {
       );
       push @alignments, $current_alignment;
     }
-    $current_alignment->appendCigarElement(
-      CracTools::SimCT::Alignment::CigarElement->new(
-        op => 'M',
-        nb => $shifted_interval->length,
-      ),
-    );
+
+    if($shifted_interval->strand ne $shifted_interval->reference_interval->strand) {
+      $current_alignment->start($shifted_interval->start);
+      $current_alignment->prependCigarElement(
+        CracTools::SimCT::Alignment::CigarElement->new(
+          op => 'M',
+          nb => $shifted_interval->length,
+        ),
+      );
+    } else {
+      $current_alignment->appendCigarElement(
+        CracTools::SimCT::Alignment::CigarElement->new(
+          op => 'M',
+          nb => $shifted_interval->length,
+        ),
+      );
+    }
     $prev_interval = $shifted_interval;
   }
 
-  # Reverse alignment if original interval was on the "reverse strand"
-  #if($original_interval->strand eq '-' && @alignments >= 2) {
-  #  @alignments = reverse @alignments;
-  #  my $i = 0;
-  #  my $j = @alignments - 1;
-  #  while($i < $j) {
-  #    my $tmp = $alignments[$i]->query_mapping_start;
-  #    $alignments[$i]->query_mapping_start($alignments[$j]->query_mapping_start);
-  #    $alignments[$j]->query_mapping_start($tmp);
-  #    $i++;
-  #    $j--;
-  #  }
-  #}
   return @alignments;
 }
 
@@ -237,12 +255,13 @@ sub getSplicedAlignments {
   map { $query_length += $_->length } @intervals;
 
   my @interval_alignements = ();
-  my $found_chim_al = 0;
   foreach my $interval(@intervals) {
     my @block_alignments = $self->getAlignments($interval);
-    $found_chim_al = 1 if(@block_alignments > 1);
     push @interval_alignements, \@block_alignments;
   }
+
+  # use Data::Dumper;
+  # print STDERR Dumper(\@interval_alignements);
 
   # Loop over splices
   foreach my $b_al (@interval_alignements) {
@@ -266,7 +285,11 @@ sub getSplicedAlignments {
         if($prev_alignment->strand eq $prev_alignment->query_strand) {
           $splice_length = $curr_alignment->start - $prev_alignment->end - 1;
         } else {
-          $splice_length = $prev_alignment->start - $curr_alignment->end - 1;
+          if($curr_alignment->strand eq '+') {
+            $splice_length = $prev_alignment->end - $curr_alignment->start - 1;
+          } else {
+            $splice_length = $prev_alignment->start - $curr_alignment->end - 1;
+          }
           # If this alignement belong to a block that have been reversed we need to permute
           # them to create the spliced alignment
           my $tmp = pop @alignments;
