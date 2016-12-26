@@ -283,11 +283,7 @@ sub getSplicedAlignments {
         if($prev_alignment->strand eq $prev_alignment->query_strand) {
           $splice_length = $curr_alignment->start - $prev_alignment->end - 1;
         } else {
-          #if($curr_alignment->strand eq '+') {
-          #  $splice_length = $prev_alignment->end - $curr_alignment->start - 1;
-          #} else {
           $splice_length = $prev_alignment->start - $curr_alignment->end - 1;
-          #}
           # use Data::Dumper;
           # print STDERR Dumper(\@interval_alignements);
           # If this alignement belong to a block that have been reversed we need to permute
