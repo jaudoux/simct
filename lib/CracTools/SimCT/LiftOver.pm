@@ -165,7 +165,7 @@ sub getAlignments {
       my $del_length;
       my $ins_length;
       if($prev_interval->strand ne $prev_interval->reference_interval->strand) {
-        $del_length = $prev_interval->end - $shifted_interval->start - 1;
+        $del_length = $prev_interval->start - $shifted_interval->end - 1;
         $ins_length = $prev_interval->reference_interval->end - $shifted_interval->reference_interval->start - 1;
         # We have a deletion in the genome we update the cigar with an insertion
         if($del_length > 0) {
@@ -260,8 +260,6 @@ sub getSplicedAlignments {
     push @interval_alignements, \@block_alignments;
   }
 
-  # use Data::Dumper;
-  # print STDERR Dumper(\@interval_alignements);
 
   # Loop over splices
   foreach my $b_al (@interval_alignements) {
@@ -285,11 +283,13 @@ sub getSplicedAlignments {
         if($prev_alignment->strand eq $prev_alignment->query_strand) {
           $splice_length = $curr_alignment->start - $prev_alignment->end - 1;
         } else {
-          if($curr_alignment->strand eq '+') {
-            $splice_length = $prev_alignment->end - $curr_alignment->start - 1;
-          } else {
-            $splice_length = $prev_alignment->start - $curr_alignment->end - 1;
-          }
+          #if($curr_alignment->strand eq '+') {
+          #  $splice_length = $prev_alignment->end - $curr_alignment->start - 1;
+          #} else {
+          $splice_length = $prev_alignment->start - $curr_alignment->end - 1;
+          #}
+          # use Data::Dumper;
+          # print STDERR Dumper(\@interval_alignements);
           # If this alignement belong to a block that have been reversed we need to permute
           # them to create the spliced alignment
           my $tmp = pop @alignments;

@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 130;
+use Test::More tests => 131;
 #use Test::More tests => 4;
 use CracTools::SimCT::LiftOver;
 use CracTools::SimCT::GenomicInterval;
@@ -266,7 +266,7 @@ $liftover->addInterval("fusion_4",50,100,100,"chr1",1); # Start at chr1 pos 0
 {
   my @a = $liftover->getAlignments(newInterval("fusion_4",25,74,'-'));
   is(scalar @a, 1);
-  is($a[0]->cigar, '25M198N25M');
+  is($a[0]->cigar, '25M150N25M');
   is($a[0]->start, 26); # 100 - 74
 }
 
@@ -283,6 +283,7 @@ $liftover->addInterval("fusion_4",50,100,100,"chr1",1); # Start at chr1 pos 0
   my @a = $liftover->getSplicedAlignments(newInterval("fusion_4",0,10,'-'), newInterval("fusion_4",25,70,'-'));
   is(scalar @a, 1);
   is($a[0]->start, 30);
+  is($a[0]->cigar, "21M150N25M14N11M");
 }
 
 
