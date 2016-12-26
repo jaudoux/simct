@@ -145,15 +145,14 @@ sub _postProcessSimulation {
       if(defined $prev_alignment) {
         my $chim_key;
 
+        # We can do that because chimeras are always encoded in the forward strand of an independent fasta.
         $chim_key = join("@",
           $prev_alignment->chr,
-          #$prev_alignment->strand eq '-' ? $prev_alignment->start : $prev_alignment->end,
-          $real_strand ne $prev_alignment->strand ? $prev_alignment->start : $prev_alignment->end,
-          $real_strand ne $prev_alignment->strand ? $prev_alignment->strand : $real_strand,
+          $prev_alignment->strand ne $intervals[0]->strand ? $prev_alignment->start : $prev_alignment->end,
+          $prev_alignment->strand ne $intervals[0]->strand ? '-' : '+',
           $alignment->chr,
-          #$alignment->strand eq '-' ? $alignment->end : $alignment->start,
-          $real_strand ne $alignment->strand ? $alignment->end : $alignment->start,
-          $real_strand ne $alignment->strand ? $alignment->strand : $real_strand);
+          $alignment->strand ne $intervals[0]->strand ? $alignment->end : $alignment->start,
+          $alignment->strand ne $intervals[0]->strand ? '-' : '+');
 
         # if($read->{reversed}) {
         #   $chim_key = join("@",
