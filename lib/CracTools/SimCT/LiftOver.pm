@@ -252,19 +252,15 @@ sub getSplicedAlignments {
 
   # Compute the whole length of the query
   my $query_length = 0;
-  map { $query_length += $_->length } @intervals;
-
-  my @interval_alignements = ();
-  foreach my $interval(@intervals) {
-    my @block_alignments = $self->getAlignments($interval);
-    push @interval_alignements, \@block_alignments;
+  foreach my $interval (@intervals) {
+    $query_length += $interval->length;
   }
 
-
   # Loop over splices
-  foreach my $b_al (@interval_alignements) {
+  foreach my $interval (@intervals) {
+
     # First we get shifted intervals
-    my @block_alignments = @{$b_al};
+    my @block_alignments = $self->getAlignments($interval);
 
     my $prev_alignment = $alignments[$#alignments];
     foreach my $curr_alignment (@block_alignments) {
@@ -301,18 +297,23 @@ sub getSplicedAlignments {
             nb => $prev_alignment->right_softclip,
           ));
         }
+
         # Regular spliced alignment
         # We can merge the two alignments
         #my $splice_length  = $curr_alignment->start - $prev_alignment->end - 1;
-        $prev_alignment->appendCigarElement(CracTools::SimCT::Alignment::CigarElement->new(
-          op => 'N',
-          nb => $splice_length,
-        ));
+        if($splice_length > 0) {
+          $prev_alignment->appendCigarElement(CracTools::SimCT::Alignment::CigarElement->new(
+            op => 'N',
+            nb => $splice_length,
+          ));
+        }
+
         foreach my $cigel ($curr_alignment->allCigarElements) {
           $prev_alignment->appendCigarElement($cigel);
         }
+
         # Now we update the query length
-        $prev_alignment->query_length($query_length);
+        $prev_alignment->query_length($prev_alignment->query_length + $curr_alignment->query_length);
         #next;
       # Otherwise this is a chimeric alignment and we push this alignement
       } else {
@@ -325,6 +326,9 @@ sub getSplicedAlignments {
       }
     }
   }
+
+  # Set query length for the last alignment
+  $alignments[$#alignments]->query_length($query_length) if @alignments > 0;
   return @alignments;
 }
 

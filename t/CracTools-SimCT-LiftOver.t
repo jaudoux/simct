@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 131;
+use Test::More tests => 145;
 #use Test::More tests => 4;
 use CracTools::SimCT::LiftOver;
 use CracTools::SimCT::GenomicInterval;
@@ -131,6 +131,36 @@ $liftover->addInterval("chr2",0,100,0);
   is($a[0]->chr,"chr2");
   is($a[0]->start,1);
   is($a[0]->cigar,"5M4N11M");
+  is($a[0]->strand,'+');
+}
+
+# Check false-spliced alignement overlapping an insertion
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("chr1",1,11,'+'),newInterval("chr1",15,18,'+'));
+  is(scalar @a, 1);
+  is($a[0]->chr, "chr1");
+  is($a[0]->start, 1);
+  is($a[0]->strand,'+');
+  is($a[0]->cigar, "9M2I4M");
+}
+
+# Check true-spliced alignement overlapping an insertion
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("chr1",1,11,'+'),newInterval("chr1",19,22,'+'));
+  is(scalar @a, 1);
+  is($a[0]->chr, "chr1");
+  is($a[0]->start, 1);
+  is($a[0]->strand,'+');
+  is($a[0]->cigar, "9M2I14N4M");
+}
+
+
+# Check multi spliced alignement on forward strand
+{
+  my @a = $liftover->getSplicedAlignments(newInterval("chr2",1,5,'+'),newInterval("chr2",8,12,'+'),newInterval("chr2",15,20,'+'));
+  is($a[0]->chr,"chr2");
+  is($a[0]->start,1);
+  is($a[0]->cigar,"5M2N5M2N6M");
   is($a[0]->strand,'+');
 }
 
