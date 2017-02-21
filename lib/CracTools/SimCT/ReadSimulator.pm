@@ -119,9 +119,15 @@ sub _postProcessSimulation {
         if($cigel->op eq 'N') {
           # Add splice
           if($cigel->nb <= $CracTools::SimCT::Const::MAX_SPLICE_LENGTH) {
-            my $splice_key = join("@", $alignment->chr, $start,
-              $start + $cigel->nb, $real_strand);
-            push @{$splices{$splice_key}},$read_id;
+            if($real_strand eq '+') {
+              my $splice_key = join("@", $alignment->chr, $start,
+                $start + $cigel->nb, $real_strand);
+              push @{$splices{$splice_key}},$read_id;
+            } else {
+              my $splice_key = join("@", $alignment->chr, $start + $cigel->nb,
+                $start, $real_strand);
+              push @{$splices{$splice_key}},$read_id;
+            }
           # Splice is larger than MAX_SPLICE_LENGTH, then it is a class2 chimera
           } else {
             my $chim_key = join('@', $alignment->chr, $start, $real_strand,
