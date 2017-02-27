@@ -29,7 +29,6 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
 
   --help                  Print this help
   --man                   Open man page
-  -p                      Number of threads/processes
 
 =head2 Input / Output
 
@@ -46,15 +45,6 @@ simCT -g reference_genome/ -a annotations.gtf [-o my_simulation]
   --vcf-file              A VCF file that contains mutations
   --vcf-ratio             Ratio of mutations that taken from the VCF source instead of random
                           (default: 0.8)
-
-=head2 Transcription simulation
-
-  --pre-mrna-rate         Rate a wich precursor RNAs are incorporated in the simulation.
-
-=head2 Post-transcription
-
-  --rna-editing-vcf       A VCF file that contains RNA-editing sites and a mutation frequence encoded
-                          in the AF field.
 
 =head2 Sequencing
 
@@ -88,14 +78,12 @@ my $flux_fragment_sd       = $CracTools::SimCT::Const::FRAGMENT_SD;
 my $flux_nb_molecules      = $CracTools::SimCT::Const::NB_MOLECULES;
 my $vcf_ratio  = 0.8;
 my $nb_fusions = 0;
-my $nb_process = 1;
 
 my @ARGV_copy = @ARGV;
 
 GetOptions( "v|verbose"             => \$verbose,
             "man"                   => \$man,
             "help"                  => \$help,
-            "p=i"                   => \$nb_process,
             # Input / Output
             "o|output-dir=s"        => \$output_dir,
             "g|genome-dir=s"        => \$genome_dir,
