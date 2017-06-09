@@ -64,8 +64,8 @@ To install SimCT from the sources, you will need [Dist::Zilla]('http://dzil.org/
 **40M reads with 100 fusion genes**:<br>
 `simCT -g genome_dir -a annotations.gtf --nb-reads 40000000 --nb-fusions 100`
 
-**40M reads with 95% of mutations taken from a VCF files**:<br>
-`simCT -g genome_dir -a annotations.gtf --nb-reads 40000000 `
+**40M reads with 5% of mutations taken from a VCF files**:<br>
+`simCT -g genome_dir -a annotations.gtf --nb-reads 40000000 --vcf-file cosmic.vcf --vcf-ration 0.05`
 
 # Documentation
 
