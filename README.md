@@ -139,7 +139,7 @@ info.txt | A text file describing the number of element for each feature (read, 
 ## Options
 
 Option name | Default value | Description
-------------|-------------
+------------|---------------|-------------
 -o,--output-dir | `simCT_simulation` | Location of the outout directory
 -g,--genome-dir | **mandatory** | xReference genome directory (with chromosomes splited in individual FASTA files)
 -a,--annotations | **mandatory**  | Annotations file in GTF format
